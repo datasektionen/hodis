@@ -1,19 +1,18 @@
-package main
+package handlers
 
 import (
 	"encoding/json"
 	"fmt"
+	"bufio"
 	"net/http"
+
+	"../models"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Verified struct {
 	User, FName, LName, Email, UgKthid string
-}
-
-type Token struct {
-	Value string `form:"token" json:"token" required:true`
 }
 
 func findToken(c *gin.Context) (string, bool) {
@@ -25,8 +24,7 @@ func findToken(c *gin.Context) (string, bool) {
 		return token, true
 	}
 
-	token := c.MustGet("body").(Body).Token
-	if token.Value != "" {
+	if token := c.MustGet("body").(models.Body).Token; token.Value != "" {
 		return token.Value, true
 	}
 
@@ -69,4 +67,19 @@ func DAuth(api_key string) gin.HandlerFunc {
 			}
 		}
 	}
+}
+
+func HasPlsPermission(uid string, system string, permission string) bool {
+	url := fmt.Sprintf("https://pls.datasektionen.se/api/user/%s/%s/%s", uid, system, permission)
+	resp, err := http.Get(url)
+	if err != nil {
+		return false
+	} else {
+		defer resp.Body.Close()
+		scanner := bufio.NewScanner(resp.Body)
+		if scanner.Scan() && scanner.Text() != "true" {
+			return false
+		}
+	}
+	return true
 }
