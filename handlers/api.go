@@ -21,7 +21,7 @@ func UserSearch(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		query := c.Param("query")
 
-		res, err := ldap.SearchWithDb(models.User{Uid: query, Cn: query, UgKthid: query}, false)
+		res, err := ldap.UserSearch(query)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			c.Abort()
@@ -34,16 +34,12 @@ func UserSearch(db *gorm.DB) gin.HandlerFunc {
 
 func Uid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		res, err := ldap.SearchWithDb(models.User{Uid: c.Param("uid")}, true)
+		res, err := ldap.ExactUid(c.Param("uid"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			c.Abort()
-		}
-
-		if len(res) < 1 {
-			c.JSON(404, gin.H{"error": "User not found"})
 		} else {
-			c.JSON(200, res[0])
+			c.JSON(200, res)
 		}
 	}
 }
@@ -65,14 +61,12 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 
 func UgKthid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		res, err := ldap.SearchWithDb(models.User{UgKthid: c.Param("ugid")}, true)
+		res, err := ldap.ExactUgid(c.Param("ugid"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			c.Abort()
-		} else if len(res) != 1 {
-			c.JSON(404, gin.H{"error": "User not found"})
 		} else {
-			c.JSON(200, res[0])
+			c.JSON(200, res)
 		}
 
 	}

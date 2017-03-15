@@ -9,7 +9,7 @@ import (
 	"../models"
 
 	"gopkg.in/ldap.v2"
-	"github.com/jinzhu/gorm"	
+	"github.com/jinzhu/gorm"
 )
 
 type Settings struct {
@@ -37,29 +37,73 @@ func Init(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
 	}
 }
 
-func userToLower(user *models.User) {
-	user.Cn = strings.ToLower(user.Cn)
-	user.Uid = strings.ToLower(user.Uid)
-	user.UgKthid = strings.ToLower(user.UgKthid)
-}
-
-func SearchWithDb(query models.User, exact bool) ([]models.User, error) {
-	userToLower(&query)
+func UserSearch(query string) (models.Users, error) {
+	query = strings.ToLower(query)
 
 	var db_results []models.User
-	s.db.Where(models.User{Uid: query.Uid}).
-		Or(models.User{UgKthid: query.UgKthid}).
-		Or(models.User{Year: query.Year}).
-		Or("cn LIKE ?", fmt.Sprintf("%%%s%%", query.Cn)).
-		Find(&db_results)
+    s.db.Where(models.User{Uid: query}).
+            Or(models.User{UgKthid: query}).
+            Or(models.User{Year: query}).
+            Or("cn LIKE ?", fmt.Sprintf("%%%s%%", query)).
+            Find(&db_results)
 
-	filter := makeFilter(query, exact)
+	filter := fmt.Sprintf("(|(cn =*%s*)(uid=*%s*)(ugKthid=*%s*)", query, query, query)
 
-	s.queries[filter]++
-	if s.queries[filter] % 5 == 0 {
-		var user models.User
-		s.db.Where(models.User{Uid: query.Uid}).First(&user)
-		s.db.Model(&user).Update("refs", user.Refs + 5)
+	return SearchWithDb(db_results, filter)
+}
+
+func ExactUid(query string) (models.User, error) {
+	query = strings.ToLower(query)
+
+	var db_results []models.User
+	s.db.Where(models.User{Uid: query}).Find(&db_results)
+
+	filter := fmt.Sprintf("(uid=%s)", query)
+
+	users, err := SearchWithDb(db_results, filter)
+
+	if err != nil {
+		return models.User{}, err
+	}
+
+	if len(users) == 1 {
+		return users[0], nil
+	} else if len(users) > 1 {
+		return models.User{}, fmt.Errorf("Exact search failed: Got multiple results.")
+	} else {
+		return models.User{}, fmt.Errorf("Exact search failed: No such user exists.")
+	}
+}
+
+func ExactUgid(query string) (models.User, error) {
+	query = strings.ToLower(query)
+
+	var db_results models.Users
+	s.db.Where(models.User{UgKthid: query}).Find(&db_results)
+
+	filter := fmt.Sprintf("(ugKthid=%s)", query)
+
+	users, err := SearchWithDb(db_results, filter)
+
+	if err != nil {
+		return models.User{}, err
+	}
+
+	if len(users) == 1 {
+		return users[0], nil
+	} else if len(users) > 1 {
+		return models.User{}, fmt.Errorf("Exact search failed: Got multiple results.")
+	} else {
+		return models.User{}, fmt.Errorf("Exact search failed: No such user exists.")
+	}
+}
+
+func SearchWithDb(db_results models.Users, filter string) (models.Users, error) {
+	if len(db_results) < 5 {
+		for _, user := range db_results {
+			user.Refs++
+			s.db.Save(&user)
+		}
 	}
 
 	if len(db_results) >= 1000 || s.queries[filter] > 0 {
@@ -72,36 +116,16 @@ func SearchWithDb(query models.User, exact bool) ([]models.User, error) {
 	}
 
 	for _, value := range user_results {
-		var users models.Users
-		s.db.Where(models.User{Uid: value.Uid}).Find(&users)
+		var user models.User
+		s.db.Where("uid = ?", value.Uid).First(&user)
 
-		if len(users) == 0 {
+		if users == nil {
 			s.db.Create(&value)
 		}
 	}
 
-
+	s.queries[filter]++
 	return uniqueUsers(user_results, db_results), nil
-}
-
-func addOption(field string, value string, exact bool) string {
-	if value != "" {
-		if !exact {
-			value = fmt.Sprintf("*%s*", value)
-		}
-		return fmt.Sprintf("(%s=%s)", field, value)
-	} else {
-		return ""
-	}
-}
-
-func makeFilter(query models.User, exact bool) string {
-	filters := "(|"
-	filters += addOption("cn", query.Cn, exact)
-	filters += addOption("uid", query.Uid, exact)
-	filters += addOption("ugKthid", query.UgKthid, exact)
-	filters += ")"
-	return filters
 }
 
 func searchLDAP(filter string) ([]models.User, error) {
