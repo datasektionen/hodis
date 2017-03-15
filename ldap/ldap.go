@@ -47,7 +47,7 @@ func UserSearch(query string) (models.Users, error) {
             Or("cn LIKE ?", fmt.Sprintf("%%%s%%", query)).
             Find(&db_results)
 
-	filter := fmt.Sprintf("(|(cn =*%s*)(uid=*%s*)(ugKthid=*%s*)", query, query, query)
+	filter := fmt.Sprintf("(|(cn =*%s*)(uid=*%s*)(ugKthid=*%s*))", query, query, query)
 
 	return SearchWithDb(db_results, filter)
 }
@@ -119,7 +119,7 @@ func SearchWithDb(db_results models.Users, filter string) (models.Users, error) 
 		var user models.User
 		s.db.Where("uid = ?", value.Uid).First(&user)
 
-		if users == nil {
+		if user.Uid == "" {
 			s.db.Create(&value)
 		}
 	}
