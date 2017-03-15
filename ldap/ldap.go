@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sort"
 
 	"../models"
 
@@ -12,7 +13,7 @@ import (
 )
 
 type Settings struct {
-	queries map[string]bool
+	queries map[string]uint
 
 	ldap_host string
 	ldap_port int
@@ -27,7 +28,7 @@ var s Settings
 
 func Init(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
 	s = Settings{
-		make(map[string]bool),
+		make(map[string]uint),
 		ldap_host,
 		ldap_port,
 		base_dn,
@@ -51,10 +52,17 @@ func SearchWithDb(query models.User, exact bool) ([]models.User, error) {
 		Or(models.User{Year: query.Year}).
 		Or("cn LIKE ?", fmt.Sprintf("%%%s%%", query.Cn)).
 		Find(&db_results)
-	
+
 	filter := makeFilter(query, exact)
 
-	if len(db_results) >= 1000 || s.queries[filter] {
+	s.queries[filter]++
+	if s.queries[filter] % 5 == 0 {
+		var user models.User
+		s.db.Where(models.User{Uid: query.Uid}).First(&user)
+		s.db.Model(&user).Update("refs", user.Refs + 5)
+	}
+
+	if len(db_results) >= 1000 || s.queries[filter] > 0 {
 		return db_results, nil
 	}
 
@@ -64,7 +72,7 @@ func SearchWithDb(query models.User, exact bool) ([]models.User, error) {
 	}
 
 	for _, value := range user_results {
-		var users []models.User
+		var users models.Users
 		s.db.Where(models.User{Uid: value.Uid}).Find(&users)
 
 		if len(users) == 0 {
@@ -72,16 +80,15 @@ func SearchWithDb(query models.User, exact bool) ([]models.User, error) {
 		}
 	}
 
-	s.queries[filter] = true
 
 	return uniqueUsers(user_results, db_results), nil
 }
 
 func addOption(field string, value string, exact bool) string {
-	if !exact {
-		value = fmt.Sprintf("*%s*", value)
-	}
 	if value != "" {
+		if !exact {
+			value = fmt.Sprintf("*%s*", value)
+		}
 		return fmt.Sprintf("(%s=%s)", field, value)
 	} else {
 		return ""
@@ -89,11 +96,12 @@ func addOption(field string, value string, exact bool) string {
 }
 
 func makeFilter(query models.User, exact bool) string {
-	filters := ""
+	filters := "(|"
 	filters += addOption("cn", query.Cn, exact)
-	filters += addOption("uid", query.Uid, false)
-	filters += addOption("ugKthid", query.UgKthid, false)
-	return fmt.Sprintf("(|%s)", filters)
+	filters += addOption("uid", query.Uid, exact)
+	filters += addOption("ugKthid", query.UgKthid, exact)
+	filters += ")"
+	return filters
 }
 
 func searchLDAP(filter string) ([]models.User, error) {
@@ -125,14 +133,14 @@ func makeSearchRequest(filter string) *ldap.SearchRequest {
 	)
 }
 
-func entriesToUsers(entries *[]*ldap.Entry) []models.User {
-	res := make([]models.User, len(*entries))
+func entriesToUsers(entries *[]*ldap.Entry) models.Users {
+	res := make(models.Users, len(*entries))
 
 	for i, entry := range *entries {
 		res[i] = models.User{
-			Cn:        entry.GetAttributeValue("cn"),
-			Uid:       entry.GetAttributeValue("uid"),
-			UgKthid:   entry.GetAttributeValue("ugKthid"),
+			Cn:      entry.GetAttributeValue("cn"),
+			Uid:     entry.GetAttributeValue("uid"),
+			UgKthid: entry.GetAttributeValue("ugKthid"),
 		}
 	}
 
@@ -143,17 +151,19 @@ func uniqueUsers(lists ...[]models.User) []models.User {
 	m := make(map[string]models.User)
 
 	for _, list := range lists {
-		for _, value := range list {
-			m[value.UgKthid] = value
+		for _, user := range list {
+			m[user.UgKthid] = user
 		}
 		
 	}
 
-	res := make([]models.User, 0, len(m))
+	res := make(models.Users, 0, len(m))
 
-	for  _, value := range m {
-	   res = append(res, value)
+	for  _, user := range m {
+	   res = append(res, user)
 	}
+
+	sort.Sort(res)
 
 	return res
 }

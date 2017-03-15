@@ -7,13 +7,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/jinzhu/gorm"
-
-	"github.com/bradfitz/slice"
 )
 
 func Cache(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var users []models.User
+		var users models.Users
 		db.Find(&users)
 		c.JSON(200, gin.H{"cache": users, "length": len(users)})
 	}
@@ -42,7 +40,7 @@ func Uid(db *gorm.DB) gin.HandlerFunc {
 			c.Abort()
 		}
 
-		if len(res) != 1 {
+		if len(res) < 1 {
 			c.JSON(404, gin.H{"error": "User not found"})
 		} else {
 			c.JSON(200, res[0])
