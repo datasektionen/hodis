@@ -38,7 +38,7 @@ func LdapInit(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
 func Search(query string) (Users, error) {
 	query = strings.ToLower(query)
 
-	var db_results []User
+	var db_results Users
     s.db.Where(User{Uid: query}).
             Or(User{UgKthid: query}).
             Or(User{Year: query}).
@@ -48,6 +48,7 @@ func Search(query string) (Users, error) {
 	filter := fmt.Sprintf("(|(cn =*%s*)(uid=*%s*)(ugKthid=*%s*))", query, query, query)
 
 	if len(db_results) >= 1000 || s.queries[filter] > 0 {
+		sort.Sort(db_results)
 		return db_results, nil
 	}
 	s.queries[filter]++
