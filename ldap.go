@@ -1,4 +1,4 @@
-package ldap
+package main
 
 import (
 	"fmt"
@@ -6,13 +6,11 @@ import (
 	"strings"
 	"sort"
 
-	"../models"
-
 	"gopkg.in/ldap.v2"
 	"github.com/jinzhu/gorm"
 )
 
-type Settings struct {
+type settings struct {
 	queries map[string]uint
 
 	ldap_host string
@@ -24,10 +22,10 @@ type Settings struct {
 	db         *gorm.DB
 }
 
-var s Settings
+var s settings
 
-func Init(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
-	s = Settings{
+func LdapInit(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
+	s = settings{
 		make(map[string]uint),
 		ldap_host,
 		ldap_port,
@@ -37,13 +35,13 @@ func Init(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
 	}
 }
 
-func Search(query string) (models.Users, error) {
+func Search(query string) (Users, error) {
 	query = strings.ToLower(query)
 
-	var db_results []models.User
-    s.db.Where(models.User{Uid: query}).
-            Or(models.User{UgKthid: query}).
-            Or(models.User{Year: query}).
+	var db_results []User
+    s.db.Where(User{Uid: query}).
+            Or(User{UgKthid: query}).
+            Or(User{Year: query}).
             Or("LOWER(cn) LIKE ?", fmt.Sprintf("%%%s%%", query)).
             Find(&db_results)
 
@@ -62,22 +60,22 @@ func Search(query string) (models.Users, error) {
 	return uniqueUsers(user_results, db_results), nil
 }
 
-func ExactUid(query string) (models.User, error) {
+func ExactUid(query string) (User, error) {
 	return exactSearch(query, "uid")
 }
 
-func ExactUgid(query string) (models.User, error) {
+func ExactUgid(query string) (User, error) {
 	return exactSearch(query, "ugKthid")
 }
 
-func exactSearch(query string, ldapField string) (models.User, error) {
-	var user models.User
+func exactSearch(query string, ldapField string) (User, error) {
+	var user User
 	userFound := false
 	if ldapField == "uid" {
-		s.db.Where(models.User{Uid: query}).First(&user)
+		s.db.Where(User{Uid: query}).First(&user)
 		userFound = user.Uid != ""
 	} else if ldapField == "ugKthid" {
-		s.db.Where(models.User{UgKthid: query}).First(&user)
+		s.db.Where(User{UgKthid: query}).First(&user)
 		userFound = user.UgKthid != ""
 	}
 	
@@ -102,7 +100,7 @@ func exactSearch(query string, ldapField string) (models.User, error) {
 	}	
 }
 
-func searchLDAP(filter string) ([]models.User, error) {
+func searchLDAP(filter string) ([]User, error) {
 	l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", s.ldap_host, s.ldap_port))
 	if err != nil {
 		return nil, fmt.Errorf("Dial failed: %s", err.Error())
@@ -128,7 +126,7 @@ func searchLDAP(filter string) ([]models.User, error) {
 
 	user_results := entriesToUsers(&res.Entries)
 
-	var user models.User
+	var user User
 	for _, value := range user_results {
 		s.db.Where("uid = ?", value.Uid).First(&user)
 
@@ -140,11 +138,11 @@ func searchLDAP(filter string) ([]models.User, error) {
 	return user_results, nil
 }
 
-func entriesToUsers(entries *[]*ldap.Entry) models.Users {
-	res := make(models.Users, len(*entries))
+func entriesToUsers(entries *[]*ldap.Entry) Users {
+	res := make(Users, len(*entries))
 
 	for i, entry := range *entries {
-		res[i] = models.User{
+		res[i] = User{
 			Cn:      entry.GetAttributeValue("cn"),
 			Uid:     entry.GetAttributeValue("uid"),
 			UgKthid: entry.GetAttributeValue("ugKthid"),
@@ -154,8 +152,8 @@ func entriesToUsers(entries *[]*ldap.Entry) models.Users {
 	return res
 }
 
-func uniqueUsers(lists ...[]models.User) []models.User {
-	m := make(map[string]models.User)
+func uniqueUsers(lists ...[]User) []User {
+	m := make(map[string]User)
 
 	for _, list := range lists {
 		for _, user := range list {
@@ -164,7 +162,7 @@ func uniqueUsers(lists ...[]models.User) []models.User {
 		
 	}
 
-	res := make(models.Users, 0, len(m))
+	res := make(Users, 0, len(m))
 
 	for  _, user := range m {
 	   res = append(res, user)

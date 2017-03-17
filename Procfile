@@ -1,1 +1,1 @@
-web: go run hodis.go
+web: hodis
