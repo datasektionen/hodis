@@ -37,95 +37,69 @@ func Init(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
 	}
 }
 
-func UserSearch(query string) (models.Users, error) {
+func Search(query string) (models.Users, error) {
 	query = strings.ToLower(query)
 
 	var db_results []models.User
     s.db.Where(models.User{Uid: query}).
             Or(models.User{UgKthid: query}).
             Or(models.User{Year: query}).
-            Or("cn LIKE ?", fmt.Sprintf("%%%s%%", query)).
+            Or("LOWER(cn) LIKE ?", fmt.Sprintf("%%%s%%", query)).
             Find(&db_results)
 
 	filter := fmt.Sprintf("(|(cn =*%s*)(uid=*%s*)(ugKthid=*%s*))", query, query, query)
 
-	return SearchWithDb(db_results, filter)
-}
-
-func ExactUid(query string) (models.User, error) {
-	query = strings.ToLower(query)
-
-	var db_results []models.User
-	s.db.Where(models.User{Uid: query}).Find(&db_results)
-
-	filter := fmt.Sprintf("(uid=%s)", query)
-
-	users, err := SearchWithDb(db_results, filter)
-
-	if err != nil {
-		return models.User{}, err
-	}
-
-	if len(users) == 1 {
-		return users[0], nil
-	} else if len(users) > 1 {
-		return models.User{}, fmt.Errorf("Exact search failed: Got multiple results.")
-	} else {
-		return models.User{}, fmt.Errorf("Exact search failed: No such user exists.")
-	}
-}
-
-func ExactUgid(query string) (models.User, error) {
-	query = strings.ToLower(query)
-
-	var db_results models.Users
-	s.db.Where(models.User{UgKthid: query}).Find(&db_results)
-
-	filter := fmt.Sprintf("(ugKthid=%s)", query)
-
-	users, err := SearchWithDb(db_results, filter)
-
-	if err != nil {
-		return models.User{}, err
-	}
-
-	if len(users) == 1 {
-		return users[0], nil
-	} else if len(users) > 1 {
-		return models.User{}, fmt.Errorf("Exact search failed: Got multiple results.")
-	} else {
-		return models.User{}, fmt.Errorf("Exact search failed: No such user exists.")
-	}
-}
-
-func SearchWithDb(db_results models.Users, filter string) (models.Users, error) {
-	if len(db_results) < 5 {
-		for _, user := range db_results {
-			user.Refs++
-			s.db.Save(&user)
-		}
-	}
-
 	if len(db_results) >= 1000 || s.queries[filter] > 0 {
 		return db_results, nil
 	}
+	s.queries[filter]++
 
 	user_results, err := searchLDAP(filter)
 	if err != nil {
 		return nil, fmt.Errorf("LDAP search failed: %s", err.Error())
 	}
 
-	for _, value := range user_results {
-		var user models.User
-		s.db.Where("uid = ?", value.Uid).First(&user)
+	return uniqueUsers(user_results, db_results), nil
+}
 
-		if user.Uid == "" {
-			s.db.Create(&value)
-		}
+func ExactUid(query string) (models.User, error) {
+	return exactSearch(query, "uid")
+}
+
+func ExactUgid(query string) (models.User, error) {
+	return exactSearch(query, "ugKthid")
+}
+
+func exactSearch(query string, ldapField string) (models.User, error) {
+	var user models.User
+	userFound := false
+	if ldapField == "uid" {
+		s.db.Where(models.User{Uid: query}).First(&user)
+		userFound = user.Uid != ""
+	} else if ldapField == "ugKthid" {
+		s.db.Where(models.User{UgKthid: query}).First(&user)
+		userFound = user.UgKthid != ""
+	}
+	
+	if userFound {
+		user.Refs++
+		s.db.Save(&user)
+		return user, nil
 	}
 
-	s.queries[filter]++
-	return uniqueUsers(user_results, db_results), nil
+	users, err := searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
+
+	if err != nil {
+		return user, err
+	}
+
+	if len(users) == 1 {
+		return users[0], nil
+	} else if len(users) > 1 {
+		return user, fmt.Errorf("Exact search failed: Got multiple results.")
+	} else {
+		return user, fmt.Errorf("Exact search failed: No such user exists.")
+	}	
 }
 
 func searchLDAP(filter string) ([]models.User, error) {
@@ -135,7 +109,15 @@ func searchLDAP(filter string) ([]models.User, error) {
 	}
 	defer l.Close()
 
-	res, err := l.SearchWithPaging(makeSearchRequest(filter), 10)
+	ldapSearchRequest := ldap.NewSearchRequest(
+		s.base_dn,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		filter,
+		s.attributes,
+		nil,
+	)
+
+	res, err := l.SearchWithPaging(ldapSearchRequest, 10)
 	if err != nil {
 		if len(res.Entries) > 0 {
 			log.Printf("%s but %d results, continuing.", err.Error(), len(res.Entries))
@@ -144,17 +126,18 @@ func searchLDAP(filter string) ([]models.User, error) {
 		}
 	}
 
-	return entriesToUsers(&res.Entries), nil
-}
+	user_results := entriesToUsers(&res.Entries)
 
-func makeSearchRequest(filter string) *ldap.SearchRequest {
-	return ldap.NewSearchRequest(
-		s.base_dn,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		filter,
-		s.attributes,
-		nil,
-	)
+	var user models.User
+	for _, value := range user_results {
+		s.db.Where("uid = ?", value.Uid).First(&user)
+
+		if user.Uid == "" {
+			s.db.Create(&value)
+		}
+	}
+
+	return user_results, nil
 }
 
 func entriesToUsers(entries *[]*ldap.Entry) models.Users {

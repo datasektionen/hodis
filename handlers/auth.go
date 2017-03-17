@@ -24,7 +24,7 @@ func findToken(c *gin.Context) (string, bool) {
 		return token, true
 	}
 
-	if token := c.MustGet("body").(models.Body).Token; token.Value != "" {
+	if token := c.MustGet("token").(models.Token); token.Value != "" {
 		return token.Value, true
 	}
 

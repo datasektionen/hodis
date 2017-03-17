@@ -21,7 +21,7 @@ func UserSearch(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		query := c.Param("query")
 
-		res, err := ldap.UserSearch(query)
+		res, err := ldap.Search(query)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			c.Abort()
@@ -46,7 +46,7 @@ func Uid(db *gorm.DB) gin.HandlerFunc {
 
 func Update(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		data := c.MustGet("body").(models.Body).User
+		data := c.MustGet("user").(models.User)
 		uid := c.MustGet("uid").(string)
 		if uid == c.Param("uid") || HasPlsPermission(uid, "hodis", "admin") {
 			var user models.User
