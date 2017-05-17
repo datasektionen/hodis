@@ -22,6 +22,7 @@ func main() {
 	} else {
 		db, err = gorm.Open("sqlite3", "users.db")
 		LdapInit("localhost", 9999, "ou=unix,dc=kth,dc=se", db)
+		r.GET("/cache", Cache(db))
 	}
 
 	if err != nil {
@@ -38,7 +39,6 @@ func main() {
 		r.Use(DAuth(login_key))
 	}
 
-	r.GET("/cache", Cache(db))
 	r.GET("/users/:query", UserSearch(db))
 	r.GET("/uid/:uid", Uid(db))
 	r.GET("/ugkthid/:ugid", UgKthid(db))
