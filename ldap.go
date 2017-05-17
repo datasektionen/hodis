@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 	"sort"
+	"strings"
 
-	"gopkg.in/ldap.v2"
 	"github.com/jinzhu/gorm"
+	"gopkg.in/ldap.v2"
 )
 
 type settings struct {
@@ -19,7 +19,7 @@ type settings struct {
 	base_dn    string
 	attributes []string
 
-	db         *gorm.DB
+	db *gorm.DB
 }
 
 var s settings
@@ -39,16 +39,17 @@ func Search(query string) (Users, error) {
 	query = strings.ToLower(query)
 
 	var db_results Users
-    s.db.Where(User{Uid: query}).
-            Or(User{UgKthid: query}).
-            Or(User{Year: query}).
-            Or("LOWER(cn) LIKE ?", fmt.Sprintf("%%%s%%", query)).
-            Find(&db_results)
+	s.db.Where(User{Uid: query}).
+		Or(User{UgKthid: query}).
+		Or("LOWER(cn) LIKE ?", fmt.Sprintf("%%%s%%", query)).
+		Find(&db_results)
 
 	filter := fmt.Sprintf("(|(cn =*%s*)(uid=*%s*)(ugKthid=*%s*))", query, query, query)
 
 	if len(db_results) >= 1000 || s.queries[filter] > 0 {
-		sort.Sort(db_results)
+		sort.Slice(db_results, func(i, j int) bool {
+			return db_results[i].Refs > db_results[j].Refs
+		})
 		return db_results, nil
 	}
 	s.queries[filter]++
@@ -79,7 +80,7 @@ func exactSearch(query string, ldapField string) (User, error) {
 		s.db.Where(User{UgKthid: query}).First(&user)
 		userFound = user.UgKthid != ""
 	}
-	
+
 	if userFound {
 		user.Refs++
 		s.db.Save(&user)
@@ -98,7 +99,7 @@ func exactSearch(query string, ldapField string) (User, error) {
 		return user, fmt.Errorf("Exact search failed: Got multiple results.")
 	} else {
 		return user, fmt.Errorf("Exact search failed: No such user exists.")
-	}	
+	}
 }
 
 func searchLDAP(filter string) ([]User, error) {
@@ -133,6 +134,9 @@ func searchLDAP(filter string) ([]User, error) {
 
 		if user.Uid == "" {
 			s.db.Create(&value)
+		} else {
+			user.Refs = uint(float64(user.Refs) * 0.9)
+			s.db.Save(&user)
 		}
 	}
 
@@ -160,16 +164,18 @@ func uniqueUsers(lists ...[]User) []User {
 		for _, user := range list {
 			m[user.UgKthid] = user
 		}
-		
+
 	}
 
 	res := make(Users, 0, len(m))
 
-	for  _, user := range m {
-	   res = append(res, user)
+	for _, user := range m {
+		res = append(res, user)
 	}
 
-	sort.Sort(res)
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Refs > res[j].Refs
+	})
 
 	return res
 }

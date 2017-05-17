@@ -1,16 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
-	"bufio"
 	"net/http"
 
 	"github.com/jinzhu/gorm"
 
 	"github.com/gin-gonic/gin"
 )
-
 
 func Cache(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -75,7 +74,6 @@ func UgKthid(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-
 func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -92,7 +90,6 @@ func BodyParser() gin.HandlerFunc {
 		c.Next()
 	}
 }
-
 
 func findToken(c *gin.Context) (string, bool) {
 	if token := c.Query("token"); token != "" {

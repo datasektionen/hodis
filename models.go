@@ -7,10 +7,10 @@ type Body struct {
 
 type User struct {
 	Cn      string `form:"cn"      json:"cn"`
-	Year    string `form:"year"    json:"year"`
+	Year    int    `form:"year"    json:"year"`
 	Uid     string `form:"uid"     json:"uid"`
 	UgKthid string `form:"ugKthid" json:"ugKthid" gorm:"primary_key"`
-	Refs    int
+	Refs    uint   `json:"-"`
 }
 
 type Token struct {
@@ -18,15 +18,3 @@ type Token struct {
 }
 
 type Users []User
-
-func (slice Users) Len() int {
-	return len(slice)
-}
-
-func (slice Users) Less(i, j  int) bool {
-	return slice[i].Refs > slice[j].Refs
-}
-
-func (slice Users) Swap(i, j int) {
-    slice[i], slice[j] = slice[j], slice[i]
-}
