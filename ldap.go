@@ -44,15 +44,15 @@ func Search(query string) (Users, error) {
 		Or("LOWER(cn) LIKE ?", fmt.Sprintf("%%%s%%", query)).
 		Find(&db_results)
 
-	filter := fmt.Sprintf("(|(cn =*%s*)(uid=*%s*)(ugKthid=*%s*))", query, query, query)
+	filter := fmt.Sprintf("(|(cn=*%s*)(uid=*%s*)(ugKthid=*%s*))", query, query, query)
 
-	if len(db_results) >= 1000 || s.queries[filter] > 0 {
+	if len(db_results) >= 1000 || s.queries[query] > 0 {
 		sort.Slice(db_results, func(i, j int) bool {
 			return db_results[i].Refs > db_results[j].Refs
 		})
 		return db_results, nil
 	}
-	s.queries[filter]++
+	s.queries[query]++
 
 	user_results, err := searchLDAP(filter)
 	if err != nil {
