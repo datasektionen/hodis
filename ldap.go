@@ -44,7 +44,7 @@ func Search(query string) (Users, error) {
 		Or("LOWER(cn) LIKE ?", fmt.Sprintf("%%%s%%", query)).
 		Find(&db_results)
 
-	filter := fmt.Sprintf("(|(cn=*%s*)(uid=*%s*)(ugKthid=*%s*))", query, query, query)
+	filter := fmt.Sprintf("(|(cn=*%s*)(uid=%s)(ugKthid=%s))", query, query, query)
 
 	if len(db_results) >= 1000 || s.queries[query] > 0 {
 		sort.Slice(db_results, func(i, j int) bool {
