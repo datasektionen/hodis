@@ -39,10 +39,7 @@ func Search(query string) (Users, error) {
 	query = strings.ToLower(query)
 
 	var db_results Users
-	s.db.Where(User{Uid: query}).
-		Or(User{UgKthid: query}).
-		Or("LOWER(cn) LIKE ?", fmt.Sprintf("%%%s%%", query)).
-		Find(&db_results)
+	s.db.Where("uid = ? OR ug_kthid = ? OR LOWER(cn) LIKE ?", query, query, fmt.Sprintf("%%%s%%", query)).Find(&db_results)
 
 	filter := fmt.Sprintf("(|(cn=*%s*)(uid=%s)(ugKthid=%s))", query, query, query)
 
@@ -128,9 +125,9 @@ func searchLDAP(filter string) ([]User, error) {
 
 	user_results := entriesToUsers(&res.Entries)
 
-	var user User
 	for _, value := range user_results {
-		s.db.Where("uid = ?", value.Uid).First(&user)
+		user := User{Uid: ""}
+		s.db.First(&user, "uid = ?", value.Uid)
 
 		if user.Uid == "" {
 			s.db.Create(&value)
