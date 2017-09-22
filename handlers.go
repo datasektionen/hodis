@@ -113,7 +113,9 @@ type Verified struct {
 
 func DAuth(api_key string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.Method == "GET" {
+		if c.Request.Method == "GET" ||
+			c.Request.Method == "HEAD" ||
+			c.Request.Method == "OPTIONS" {
 			c.Next()
 			return
 		}
