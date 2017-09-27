@@ -94,14 +94,21 @@ func BodyParser() gin.HandlerFunc {
 func findToken(c *gin.Context) (string, bool) {
 	if token := c.Query("token"); token != "" {
 		return token, true
+	} else if token := c.Query("api_key"); token != "" {
+		return token, false
 	}
 
 	if token := c.PostForm("token"); token != "" {
 		return token, true
+	} else if token := c.PostForm("api_key"); token != "" {
+		return token, false
 	}
 
-	if token := c.MustGet("token").(Token); token.Value != "" {
-		return token.Value, true
+	token := c.MustGet("token").(Token)
+	if token.Login != "" {
+		return token.Login, true
+	} else if token.API != "" {
+		return token.API, false
 	}
 
 	return "", false
@@ -122,9 +129,14 @@ func DAuth(api_key string) gin.HandlerFunc {
 
 		token, ok := findToken(c)
 		if !ok {
-			c.JSON(400, gin.H{"error": "Missing token"})
-			c.Abort()
-			return
+			if token != "" {
+				c.Set("uid", token)
+				return
+			} else {
+				c.JSON(400, gin.H{"error": "Missing token"})
+				c.Abort()
+				return
+			}
 		}
 
 		url := fmt.Sprintf("https://login2.datasektionen.se/verify/%s.json?api_key=%s", token, api_key)

@@ -14,7 +14,8 @@ type User struct {
 }
 
 type Token struct {
-	Value string `form:"token" json:"token"`
+	Login string `form:"token" json:"token"`
+	API   string `form:"api_key" json:"api_key"`
 }
 
 type Users []User
