@@ -50,6 +50,7 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		data := c.MustGet("user").(User)
 		uid := c.MustGet("uid").(string)
+		ExactUid(c.Param("uid"))
 		if uid == c.Param("uid") || HasPlsPermission(uid, "hodis", "admin") {
 			var user User
 			db.Where(User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
