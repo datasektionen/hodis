@@ -78,6 +78,7 @@ func UgKthid(db *gorm.DB) gin.HandlerFunc {
 func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Headers", "Content-Type")
 		c.Next()
 	}
 }
@@ -130,6 +131,7 @@ func DAuth(api_key string) gin.HandlerFunc {
 
 		token, ok := findToken(c)
 		if !ok {
+			//was actually api key
 			if token != "" {
 				c.Set("uid", token)
 				return

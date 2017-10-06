@@ -45,5 +45,11 @@ func main() {
 
 	r.POST("/uid/:uid", Update(db))
 
+	r.OPTIONS("/users/:query", func(c *gin.Context) {
+		c.JSON(200, gin.H{})
+	})
+	r.OPTIONS("/uid/:uid", Uid(db))
+	r.OPTIONS("/ugkthid/:ugid", UgKthid(db))
+
 	r.Run()
 }

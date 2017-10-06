@@ -125,17 +125,20 @@ func searchLDAP(filter string) ([]User, error) {
 
 	user_results := entriesToUsers(&res.Entries)
 
-	for _, value := range user_results {
-		user := User{Uid: ""}
-		s.db.First(&user, "uid = ?", value.Uid)
+	// Update the db asynchronously
+	go func() {
+		for _, value := range user_results {
+			user := User{Uid: ""}
+			s.db.First(&user, "uid = ?", value.Uid)
 
-		if user.Uid == "" {
-			s.db.Create(&value)
-		} else {
-			user.Refs = uint(float64(user.Refs) * 0.9)
-			s.db.Save(&user)
+			if user.Uid == "" {
+				s.db.Create(&value)
+			} else {
+				user.Refs = uint(float64(user.Refs) * 0.9)
+				s.db.Save(&user)
+			}
 		}
-	}
+	}()
 
 	return user_results, nil
 }
@@ -171,7 +174,11 @@ func uniqueUsers(lists ...[]User) []User {
 	}
 
 	sort.Slice(res, func(i, j int) bool {
-		return res[i].Refs > res[j].Refs
+		if res[i].Year == res[j].Year {
+			return res[i].Refs > res[j].Refs
+		} else {
+			return res[i].Year > res[j].Year
+		}
 	})
 
 	return res
