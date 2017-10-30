@@ -5,13 +5,14 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/jinzhu/gorm"
 	"gopkg.in/ldap.v2"
 )
 
 type settings struct {
-	queries map[string]uint
+	queries *sync.Map
 
 	ldap_host string
 	ldap_port int
@@ -26,7 +27,7 @@ var s settings
 
 func LdapInit(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
 	s = settings{
-		make(map[string]uint),
+		new(sync.Map),
 		ldap_host,
 		ldap_port,
 		base_dn,
@@ -43,18 +44,20 @@ func Search(query string) (Users, error) {
 
 	filter := fmt.Sprintf("(|(cn=*%s*)(uid=%s)(ugKthid=%s))", query, query, query)
 
-	if len(db_results) >= 1000 || s.queries[query] > 0 {
+	if _, ok := s.queries.Load(query); ok || len(db_results) >= 1000 {
 		sort.Slice(db_results, func(i, j int) bool {
 			return db_results[i].Refs > db_results[j].Refs
 		})
 		return db_results, nil
 	}
-	s.queries[query]++
 
 	user_results, err := searchLDAP(filter)
+
 	if err != nil {
 		return nil, fmt.Errorf("LDAP search failed: %s", err.Error())
 	}
+
+	s.queries.Store(query, nil)
 
 	return uniqueUsers(user_results, db_results), nil
 }
