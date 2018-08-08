@@ -18,10 +18,10 @@ func main() {
 
 	if gin.Mode() == gin.ReleaseMode {
 		db, err = gorm.Open("postgres", os.Getenv("DATABASE_URL"))
-		LdapInit("ldap.kth.se", 389, "ou=unix,dc=kth,dc=se", db)
+		LdapInit("ldap.kth.se", 389, "ou=Addressbook,dc=kth,dc=se", db)
 	} else {
 		db, err = gorm.Open("sqlite3", "users.db")
-		LdapInit("localhost", 9999, "ou=unix,dc=kth,dc=se", db)
+		LdapInit("localhost", 9999, "ou=Addressbook,dc=kth,dc=se", db)
 		r.GET("/cache", Cache(db))
 	}
 

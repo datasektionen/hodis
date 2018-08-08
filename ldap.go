@@ -31,10 +31,12 @@ func LdapInit(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
 		ldap_host,
 		ldap_port,
 		base_dn,
-		[]string{"cn", "uid", "ugKthid"},
+		[]string{"ugUsername", "ugKthid", "givenName", "displayName", "mail", "cn"},
 		db,
 	}
 }
+
+
 
 func Search(query string) (Users, error) {
 	query = strings.ToLower(query)
@@ -42,7 +44,7 @@ func Search(query string) (Users, error) {
 	var db_results Users
 	s.db.Where("uid = ? OR ug_kthid = ? OR LOWER(cn) LIKE ?", query, query, fmt.Sprintf("%%%s%%", query)).Find(&db_results)
 
-	filter := fmt.Sprintf("(|(cn=*%s*)(uid=%s)(ugKthid=%s))", query, query, query)
+	filter := fmt.Sprintf("(|(displayName=*%s*)(ugUsername=%s)(ugKthid=%s))", query, query, query)
 
 	if _, ok := s.queries.Load(query); ok || len(db_results) >= 1000 {
 		sort.Slice(db_results, func(i, j int) bool {
@@ -50,6 +52,7 @@ func Search(query string) (Users, error) {
 		})
 		return db_results, nil
 	}
+
 
 	user_results, err := searchLDAP(filter)
 
@@ -63,7 +66,7 @@ func Search(query string) (Users, error) {
 }
 
 func ExactUid(query string) (User, error) {
-	return exactSearch(query, "uid")
+	return exactSearch(query, "ugUsername")
 }
 
 func ExactUgid(query string) (User, error) {
@@ -73,7 +76,7 @@ func ExactUgid(query string) (User, error) {
 func exactSearch(query string, ldapField string) (User, error) {
 	var user User
 	userFound := false
-	if ldapField == "uid" {
+	if ldapField == "ugUsername" {
 		s.db.Where(User{Uid: query}).First(&user)
 		userFound = user.Uid != ""
 	} else if ldapField == "ugKthid" {
@@ -82,6 +85,7 @@ func exactSearch(query string, ldapField string) (User, error) {
 	}
 
 	if userFound {
+		//Add an arbitrary ref to the user
 		user.Refs++
 		s.db.Save(&user)
 		return user, nil
@@ -128,7 +132,7 @@ func searchLDAP(filter string) ([]User, error) {
 
 	user_results := entriesToUsers(&res.Entries)
 
-	// Update the db asynchronously
+	//Update the db asynchronously
 	go func() {
 		for _, value := range user_results {
 			user := User{Uid: ""}
@@ -137,6 +141,7 @@ func searchLDAP(filter string) ([]User, error) {
 			if user.Uid == "" {
 				s.db.Create(&value)
 			} else {
+				//Add some arbitrary decay to the the users refs
 				user.Refs = uint(float64(user.Refs) * 0.9)
 				s.db.Save(&user)
 			}
@@ -151,9 +156,12 @@ func entriesToUsers(entries *[]*ldap.Entry) Users {
 
 	for i, entry := range *entries {
 		res[i] = User{
-			Cn:      entry.GetAttributeValue("cn"),
-			Uid:     entry.GetAttributeValue("uid"),
+			Cn: entry.GetAttributeValue("cn"),
+			Uid: entry.GetAttributeValue("ugUsername"),
 			UgKthid: entry.GetAttributeValue("ugKthid"),
+			GivenName: entry.GetAttributeValue("givenName"),
+			DisplayName: entry.GetAttributeValue("displayName"),
+			Mail: entry.GetAttributeValue("mail"),
 		}
 	}
 
