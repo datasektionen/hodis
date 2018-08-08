@@ -88,6 +88,10 @@ func exactSearch(query string, ldapField string) (User, error) {
 		//Add an arbitrary ref to the user
 		user.Refs++
 		s.db.Save(&user)
+
+		//Posibly fix missing fields
+		//This should be removed in the future
+		go searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
 		return user, nil
 	}
 
@@ -136,13 +140,21 @@ func searchLDAP(filter string) ([]User, error) {
 	go func() {
 		for _, value := range user_results {
 			user := User{Uid: ""}
-			s.db.First(&user, "uid = ?", value.Uid)
+			s.db.First(&user, "ug_kthid = ?", value.UgKthid)
 
 			if user.Uid == "" {
 				s.db.Create(&value)
 			} else {
 				//Add some arbitrary decay to the the users refs
 				user.Refs = uint(float64(user.Refs) * 0.9)
+
+				//Update names to match new base DN
+				//These should be removed in the future
+				user.Cn = value.Cn
+				user.GivenName = value.GivenName
+				user.DisplayName = value.DisplayName
+				user.Mail = value.Mail
+
 				s.db.Save(&user)
 			}
 		}
