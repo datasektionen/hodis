@@ -46,22 +46,6 @@ func Uid(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func Update(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		data := c.MustGet("user").(User)
-		uid := c.MustGet("uid").(string)
-		ExactUid(c.Param("uid"))
-		if uid == c.Param("uid") || HasPlsPermission(uid, "hodis", "admin") {
-			var user User
-			db.Where(User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
-			c.JSON(200, user)
-		} else {
-			c.JSON(401, gin.H{"error": "Permission denied."})
-		}
-
-	}
-}
-
 func UgKthid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		res, err := ExactUgid(c.Param("ugid"))
@@ -70,6 +54,38 @@ func UgKthid(db *gorm.DB) gin.HandlerFunc {
 			c.Abort()
 		} else {
 			c.JSON(200, res)
+		}
+
+	}
+}
+
+func Tag(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var user User
+		db.Where(User{Tag: c.Param("tag")}).First(&user)
+		if user.Uid != "" {
+			c.JSON(200, user)
+		} else {
+			c.JSON(404, gin.H{"error": "Found no such tag"})
+			c.Abort()
+		}
+
+	}
+}
+
+
+func Update(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		data := c.MustGet("data").(User)
+		uid := c.MustGet("uid").(string)
+		pls := c.MustGet("pls").(bool)
+		ExactUid(c.Param("uid"))
+		if uid == c.Param("uid") || pls {
+			var user User
+			db.Where(User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
+			c.JSON(200, user)
+		} else {
+			c.JSON(401, gin.H{"error": "Permission denied."})
 		}
 
 	}
@@ -87,7 +103,7 @@ func BodyParser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := Body{}
 		c.Bind(&body)
-		c.Set("user", body.User)
+		c.Set("data", body.User)
 		c.Set("token", body.Token)
 		c.Next()
 	}
@@ -120,7 +136,7 @@ type Verified struct {
 	User, FName, LName, Email, UgKthid string
 }
 
-func DAuth(api_key string) gin.HandlerFunc {
+func Authenticate(api_key string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "GET" ||
 			c.Request.Method == "HEAD" ||
@@ -129,45 +145,43 @@ func DAuth(api_key string) gin.HandlerFunc {
 			return
 		}
 
-		token, ok := findToken(c)
-		if !ok {
-			//was actually api key
-			if token != "" {
-				c.Set("uid", token)
-				return
-			} else {
-				c.JSON(400, gin.H{"error": "Missing token"})
-				c.Abort()
-				return
-			}
-		}
+		token := c.MustGet("token").(Token)
+		if token.Login != "" {
+			url := fmt.Sprintf("https://login.datasektionen.se/verify/%s?api_key=%s", token.Login, api_key)
+			resp, err := http.Get(url)
 
-		url := fmt.Sprintf("https://login2.datasektionen.se/verify/%s.json?api_key=%s", token, api_key)
-		resp, err := http.Get(url)
-
-		if err != nil {
-			c.JSON(500, gin.H{"error": err})
-			c.Abort()
-		} else {
-			defer resp.Body.Close()
-			if resp.StatusCode != 200 {
-				fmt.Println(resp)
-				fmt.Println(token)
-				c.JSON(401, gin.H{"error": "Access denied"})
+			if err != nil {
+				c.JSON(500, gin.H{"error": err})
 				c.Abort()
 			} else {
-				var res Verified
-				if json.NewDecoder(resp.Body).Decode(&res) == nil {
-					c.Set("uid", res.User)
+				defer resp.Body.Close()
+				if resp.StatusCode != 200 {
+					fmt.Println(resp)
+					fmt.Println(token.Login)
+					c.JSON(401, gin.H{"error": "Access denied"})
+					c.Abort()
+				} else {
+					var res Verified
+					if json.NewDecoder(resp.Body).Decode(&res) == nil {
+						c.Set("uid", res.User)
+					}
+					c.Set("pls", HasPlsPermission("user", res.User, "admin"))
+					c.Next()
 				}
-				c.Next()
 			}
+		} else if token.API != "" {
+			c.Set("uid", "")
+			c.Set("pls", HasPlsPermission("token", token.API, "admin"))
+			c.Next()
+		} else {
+			c.JSON(400, gin.H{"error": "Missing token"})
+			c.Abort()
 		}
 	}
 }
 
-func HasPlsPermission(uid string, system string, permission string) bool {
-	url := fmt.Sprintf("https://pls.datasektionen.se/api/user/%s/%s/%s", uid, system, permission)
+func HasPlsPermission(token_type string, token_value string, permission string) bool {
+	url := fmt.Sprintf("https://pls.datasektionen.se/api/%s/%s/hodis/%s", token_type, token_value, permission)
 	resp, err := http.Get(url)
 	if err != nil {
 		return false

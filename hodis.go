@@ -36,12 +36,13 @@ func main() {
 
 	login_key := os.Getenv("LOGIN_API_KEY")
 	if login_key != "" {
-		r.Use(DAuth(login_key))
+		r.Use(Authenticate(login_key))
 	}
 
 	r.GET("/users/:query", UserSearch(db))
 	r.GET("/uid/:uid", Uid(db))
 	r.GET("/ugkthid/:ugid", UgKthid(db))
+	r.GET("/tag/:tag", Tag(db))
 
 	r.POST("/uid/:uid", Update(db))
 

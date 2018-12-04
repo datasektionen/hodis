@@ -6,15 +6,17 @@ type Body struct {
 }
 
 type User struct {
-	Cn      string `form:"cn"      json:"cn"`
-	Year    int    `form:"year"    json:"year"`
-	Uid     string `form:"uid"     json:"uid"`
-	UgKthid string `form:"ugKthid" json:"ugKthid" gorm:"primary_key"`
-	Mail    string `form:"mail" json:"mail"`
-	GivenName   string `form:"givenName" json:"givenName"`
+	UgKthid     string `form:"ugKthid"     json:"ugKthid" gorm:"primary_key"`
+	Uid         string `form:"uid"         json:"uid"`
+	Cn          string `form:"cn"          json:"cn"`
+	Mail        string `form:"mail"        json:"mail"`
+	GivenName   string `form:"givenName"   json:"givenName"`
 	DisplayName string `form:"displayName" json:"displayName"`
 
-	Refs    uint   `json:"-"`
+	Year        int    `form:"year"        json:"year"`
+	Tag         string `form:"tag"         json:"tag"`
+
+	Refs        uint   `json:"-"`
 }
 
 type Token struct {
