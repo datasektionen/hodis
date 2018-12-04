@@ -77,8 +77,17 @@ func Tag(db *gorm.DB) gin.HandlerFunc {
 func Update(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		data := c.MustGet("data").(User)
+		// Nobody can change UgKthid
+		data.UgKthid = ""
+
 		uid := c.MustGet("uid").(string)
 		pls := c.MustGet("pls").(bool)
+
+		if !pls {
+			// No admin? No change
+			data.Uid = ""
+		}
+
 		ExactUid(c.Param("uid"))
 		if uid == c.Param("uid") || pls {
 			var user User
@@ -156,8 +165,6 @@ func Authenticate(api_key string) gin.HandlerFunc {
 			} else {
 				defer resp.Body.Close()
 				if resp.StatusCode != 200 {
-					fmt.Println(resp)
-					fmt.Println(token.Login)
 					c.JSON(401, gin.H{"error": "Access denied"})
 					c.Abort()
 				} else {
