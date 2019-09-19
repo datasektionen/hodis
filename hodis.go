@@ -43,6 +43,7 @@ func main() {
 	r.GET("/uid/:uid", Uid(db))
 	r.GET("/ugkthid/:ugid", UgKthid(db))
 	r.GET("/tag/:tag", Tag(db))
+	r.GET("/ping", Ping(db))
 
 	r.POST("/uid/:uid", Update(db))
 
