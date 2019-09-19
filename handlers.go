@@ -73,7 +73,6 @@ func Tag(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-
 func Update(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		data := c.MustGet("data").(User)
@@ -200,4 +199,10 @@ func HasPlsPermission(token_type string, token_value string, permission string) 
 		}
 	}
 	return true
+}
+
+func Ping(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(200, "Pong")
+	}
 }
