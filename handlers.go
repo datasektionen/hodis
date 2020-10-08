@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/jinzhu/gorm"
-
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
 )
 
 func Cache(db *gorm.DB) gin.HandlerFunc {
@@ -30,7 +29,6 @@ func UserSearch(db *gorm.DB) gin.HandlerFunc {
 		} else {
 			c.JSON(200, res)
 		}
-
 	}
 }
 
@@ -55,7 +53,6 @@ func UgKthid(db *gorm.DB) gin.HandlerFunc {
 		} else {
 			c.JSON(200, res)
 		}
-
 	}
 }
 
@@ -69,7 +66,6 @@ func Tag(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(404, gin.H{"error": "Found no such tag"})
 			c.Abort()
 		}
-
 	}
 }
 
@@ -81,7 +77,6 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 
 		uid := c.MustGet("uid").(string)
 		pls := c.MustGet("pls").(bool)
-
 		if !pls {
 			// No admin? No change
 			data.Uid = ""
@@ -95,7 +90,6 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 		} else {
 			c.JSON(401, gin.H{"error": "Permission denied."})
 		}
-
 	}
 }
 
@@ -144,7 +138,7 @@ type Verified struct {
 	User, FName, LName, Email, UgKthid string
 }
 
-func Authenticate(api_key string) gin.HandlerFunc {
+func Authenticate(apiKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "GET" ||
 			c.Request.Method == "HEAD" ||
@@ -155,7 +149,7 @@ func Authenticate(api_key string) gin.HandlerFunc {
 
 		token := c.MustGet("token").(Token)
 		if token.Login != "" {
-			url := fmt.Sprintf("https://login.datasektionen.se/verify/%s?api_key=%s", token.Login, api_key)
+			url := fmt.Sprintf("https://login.datasektionen.se/verify/%s?api_key=%s", token.Login, apiKey)
 			resp, err := http.Get(url)
 
 			if err != nil {
@@ -186,17 +180,16 @@ func Authenticate(api_key string) gin.HandlerFunc {
 	}
 }
 
-func HasPlsPermission(token_type string, token_value string, permission string) bool {
-	url := fmt.Sprintf("https://pls.datasektionen.se/api/%s/%s/hodis/%s", token_type, token_value, permission)
+func HasPlsPermission(tokenType string, tokenValue string, permission string) bool {
+	url := fmt.Sprintf("https://pls.datasektionen.se/api/%s/%s/hodis/%s", tokenType, tokenValue, permission)
 	resp, err := http.Get(url)
 	if err != nil {
 		return false
-	} else {
-		defer resp.Body.Close()
-		scanner := bufio.NewScanner(resp.Body)
-		if scanner.Scan() && scanner.Text() != "true" {
-			return false
-		}
+	}
+	defer resp.Body.Close()
+	scanner := bufio.NewScanner(resp.Body)
+	if scanner.Scan() && scanner.Text() != "true" {
+		return false
 	}
 	return true
 }

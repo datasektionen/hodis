@@ -14,10 +14,10 @@ import (
 type settings struct {
 	queries *sync.Map
 
-	ldap_host string
-	ldap_port int
+	ldapHost string
+	ldapPort int
 
-	base_dn    string
+	baseDn     string
 	attributes []string
 
 	db *gorm.DB
@@ -25,44 +25,40 @@ type settings struct {
 
 var s settings
 
-func LdapInit(ldap_host string, ldap_port int, base_dn string, db *gorm.DB) {
+func LdapInit(ldapHost string, ldapPort int, baseDn string, db *gorm.DB) {
 	s = settings{
 		new(sync.Map),
-		ldap_host,
-		ldap_port,
-		base_dn,
+		ldapHost,
+		ldapPort,
+		baseDn,
 		[]string{"ugUsername", "ugKthid", "givenName", "displayName", "mail", "cn"},
 		db,
 	}
 }
 
-
-
 func Search(query string) (Users, error) {
 	query = strings.ToLower(query)
 
-	var db_results Users
-	s.db.Where("uid = ? OR ug_kthid = ? OR LOWER(cn) LIKE ?", query, query, fmt.Sprintf("%%%s%%", query)).Find(&db_results)
+	var dbResults Users
+	s.db.Where("uid = ? OR ug_kthid = ? OR LOWER(cn) LIKE ?", query, query, fmt.Sprintf("%%%s%%", query)).Find(&dbResults)
 
 	filter := fmt.Sprintf("(|(displayName=*%s*)(ugUsername=%s)(ugKthid=%s))", query, query, query)
 
-	if _, ok := s.queries.Load(query); ok || len(db_results) >= 1000 {
-		sort.Slice(db_results, func(i, j int) bool {
-			return db_results[i].Refs > db_results[j].Refs
+	if _, ok := s.queries.Load(query); ok || len(dbResults) >= 1000 {
+		sort.Slice(dbResults, func(i, j int) bool {
+			return dbResults[i].Refs > dbResults[j].Refs
 		})
-		return db_results, nil
+		return dbResults, nil
 	}
 
-
-	user_results, err := searchLDAP(filter)
-
+	userResults, err := searchLDAP(filter)
 	if err != nil {
 		return nil, fmt.Errorf("LDAP search failed: %s", err.Error())
 	}
 
 	s.queries.Store(query, nil)
 
-	return uniqueUsers(user_results, db_results), nil
+	return uniqueUsers(userResults, dbResults), nil
 }
 
 func ExactUid(query string) (User, error) {
@@ -96,7 +92,6 @@ func exactSearch(query string, ldapField string) (User, error) {
 	}
 
 	users, err := searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
-
 	if err != nil {
 		return user, err
 	}
@@ -104,21 +99,20 @@ func exactSearch(query string, ldapField string) (User, error) {
 	if len(users) == 1 {
 		return users[0], nil
 	} else if len(users) > 1 {
-		return user, fmt.Errorf("Exact search failed: Got multiple results.")
-	} else {
-		return user, fmt.Errorf("Exact search failed: No such user exists.")
+		return user, fmt.Errorf("exact search failed: Got multiple results")
 	}
+	return user, fmt.Errorf("exact search failed: No such user exists")
 }
 
 func searchLDAP(filter string) ([]User, error) {
-	l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", s.ldap_host, s.ldap_port))
+	l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", s.ldapHost, s.ldapPort))
 	if err != nil {
 		return nil, fmt.Errorf("Dial failed: %s", err.Error())
 	}
 	defer l.Close()
 
 	ldapSearchRequest := ldap.NewSearchRequest(
-		s.base_dn,
+		s.baseDn,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
 		s.attributes,
@@ -134,11 +128,11 @@ func searchLDAP(filter string) ([]User, error) {
 		}
 	}
 
-	user_results := entriesToUsers(&res.Entries)
+	userResults := entriesToUsers(&res.Entries)
 
 	//Update the db asynchronously
 	go func() {
-		for _, value := range user_results {
+		for _, value := range userResults {
 			user := User{Uid: ""}
 			s.db.First(&user, "ug_kthid = ?", value.UgKthid)
 
@@ -160,7 +154,7 @@ func searchLDAP(filter string) ([]User, error) {
 		}
 	}()
 
-	return user_results, nil
+	return userResults, nil
 }
 
 func entriesToUsers(entries *[]*ldap.Entry) Users {
@@ -168,12 +162,12 @@ func entriesToUsers(entries *[]*ldap.Entry) Users {
 
 	for i, entry := range *entries {
 		res[i] = User{
-			Cn: entry.GetAttributeValue("cn"),
-			Uid: entry.GetAttributeValue("ugUsername"),
-			UgKthid: entry.GetAttributeValue("ugKthid"),
-			GivenName: entry.GetAttributeValue("givenName"),
+			Cn:          entry.GetAttributeValue("cn"),
+			Uid:         entry.GetAttributeValue("ugUsername"),
+			UgKthid:     entry.GetAttributeValue("ugKthid"),
+			GivenName:   entry.GetAttributeValue("givenName"),
 			DisplayName: entry.GetAttributeValue("displayName"),
-			Mail: entry.GetAttributeValue("mail"),
+			Mail:        entry.GetAttributeValue("mail"),
 		}
 	}
 
@@ -187,7 +181,6 @@ func uniqueUsers(lists ...[]User) []User {
 		for _, user := range list {
 			m[user.UgKthid] = user
 		}
-
 	}
 
 	res := make(Users, 0, len(m))
@@ -199,9 +192,8 @@ func uniqueUsers(lists ...[]User) []User {
 	sort.Slice(res, func(i, j int) bool {
 		if res[i].Year == res[j].Year {
 			return res[i].Refs > res[j].Refs
-		} else {
-			return res[i].Year > res[j].Year
 		}
+		return res[i].Year > res[j].Year
 	})
 
 	return res

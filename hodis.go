@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -24,19 +23,19 @@ func main() {
 		LdapInit("localhost", 9999, "ou=Addressbook,dc=kth,dc=se", db)
 		r.GET("/cache", Cache(db))
 	}
-
 	if err != nil {
 		panic("Failed to connect database")
 	}
+
 	defer db.Close()
 	db.AutoMigrate(&User{})
 
 	r.Use(BodyParser())
 	r.Use(CORS())
 
-	login_key := os.Getenv("LOGIN_API_KEY")
-	if login_key != "" {
-		r.Use(Authenticate(login_key))
+	loginKey := os.Getenv("LOGIN_API_KEY")
+	if loginKey != "" {
+		r.Use(Authenticate(loginKey))
 	}
 
 	r.GET("/users/:query", UserSearch(db))
