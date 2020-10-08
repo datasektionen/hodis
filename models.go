@@ -13,10 +13,10 @@ type User struct {
 	GivenName   string `form:"givenName"   json:"givenName"`
 	DisplayName string `form:"displayName" json:"displayName"`
 
-	Year        int    `form:"year"        json:"year"`
-	Tag         string `form:"tag"         json:"tag"`
+	Year int    `form:"year"        json:"year"`
+	Tag  string `form:"tag"         json:"tag"`
 
-	Refs        uint   `json:"-"`
+	Refs uint `json:"-"`
 }
 
 type Token struct {
