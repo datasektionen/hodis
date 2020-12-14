@@ -44,7 +44,7 @@ func Search(query string) (Users, error) {
 	var db_results Users
 	s.db.Where("uid = ? OR ug_kthid = ? OR LOWER(cn) LIKE ?", query, query, fmt.Sprintf("%%%s%%", query)).Find(&db_results)
 
-	filter := fmt.Sprintf("(|(displayName=*%s*)(ugUsername=%s)(ugKthid=%s))", query, query, query)
+	filter := fmt.Sprintf("(|(displayName=*%[1]s*)(ugUsername=%[1]s)(ugKthid=%[1]s))", ldap.EscapeFilter(query))
 
 	if _, ok := s.queries.Load(query); ok || len(db_results) >= 1000 {
 		sort.Slice(db_results, func(i, j int) bool {
@@ -91,11 +91,11 @@ func exactSearch(query string, ldapField string) (User, error) {
 
 		//Posibly fix missing fields
 		//This should be removed in the future
-		go searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
+		go searchLDAP(fmt.Sprintf("(%s=%s)", ldap.EscapeFilter(ldapField), ldap.EscapeFilter(query)))
 		return user, nil
 	}
 
-	users, err := searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
+	users, err := searchLDAP(fmt.Sprintf("(%s=%s)", ldap.EscapeFilter(ldapField), ldap.EscapeFilter(query)))
 
 	if err != nil {
 		return user, err
