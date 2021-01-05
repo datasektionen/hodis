@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,15 +20,12 @@ func Cache(db *gorm.DB) gin.HandlerFunc {
 
 func UserSearch(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		query := c.Param("query")
-
-		res, err := Search(query)
+		res, err := Search(c.Param("query"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
-			c.Abort()
-		} else {
-			c.JSON(200, res)
+			return
 		}
+		c.JSON(200, res)
 	}
 }
 
@@ -37,10 +34,9 @@ func Uid(db *gorm.DB) gin.HandlerFunc {
 		res, err := ExactUid(c.Param("uid"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
-			c.Abort()
-		} else {
-			c.JSON(200, res)
+			return
 		}
+		c.JSON(200, res)
 	}
 }
 
@@ -49,10 +45,9 @@ func UgKthid(db *gorm.DB) gin.HandlerFunc {
 		res, err := ExactUgid(c.Param("ugid"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
-			c.Abort()
-		} else {
-			c.JSON(200, res)
+			return
 		}
+		c.JSON(200, res)
 	}
 }
 
@@ -60,12 +55,11 @@ func Tag(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var user User
 		db.Where(User{Tag: c.Param("tag")}).First(&user)
-		if user.Uid != "" {
-			c.JSON(200, user)
-		} else {
+		if user.Uid == "" {
 			c.JSON(404, gin.H{"error": "Found no such tag"})
-			c.Abort()
+			return
 		}
+		c.JSON(200, user)
 	}
 }
 
@@ -83,13 +77,13 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		ExactUid(c.Param("uid"))
-		if uid == c.Param("uid") || pls {
-			var user User
-			db.Where(User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
-			c.JSON(200, user)
-		} else {
+		if uid != c.Param("uid") && !pls {
 			c.JSON(401, gin.H{"error": "Permission denied."})
+			return
 		}
+		var user User
+		db.Where(User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
+		c.JSON(200, user)
 	}
 }
 
@@ -111,31 +105,8 @@ func BodyParser() gin.HandlerFunc {
 	}
 }
 
-func findToken(c *gin.Context) (string, bool) {
-	if token := c.Query("token"); token != "" {
-		return token, true
-	} else if token := c.Query("api_key"); token != "" {
-		return token, false
-	}
-
-	if token := c.PostForm("token"); token != "" {
-		return token, true
-	} else if token := c.PostForm("api_key"); token != "" {
-		return token, false
-	}
-
-	token := c.MustGet("token").(Token)
-	if token.Login != "" {
-		return token.Login, true
-	} else if token.API != "" {
-		return token.API, false
-	}
-
-	return "", false
-}
-
-type Verified struct {
-	User, FName, LName, Email, UgKthid string
+type verified struct {
+	User string `json:"user"`
 }
 
 func Authenticate(apiKey string) gin.HandlerFunc {
@@ -151,24 +122,26 @@ func Authenticate(apiKey string) gin.HandlerFunc {
 		if token.Login != "" {
 			url := fmt.Sprintf("https://login.datasektionen.se/verify/%s?api_key=%s", token.Login, apiKey)
 			resp, err := http.Get(url)
-
 			if err != nil {
 				c.JSON(500, gin.H{"error": err})
 				c.Abort()
-			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode != 200 {
-					c.JSON(401, gin.H{"error": "Access denied"})
-					c.Abort()
-				} else {
-					var res Verified
-					if json.NewDecoder(resp.Body).Decode(&res) == nil {
-						c.Set("uid", res.User)
-					}
-					c.Set("pls", HasPlsPermission("user", res.User, "admin"))
-					c.Next()
-				}
+				return
 			}
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				c.JSON(401, gin.H{"error": "Access denied"})
+				c.Abort()
+				return
+			}
+			var res verified
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				c.JSON(500, gin.H{"error": "Failed to unmarshal json"})
+				c.Abort()
+				return
+			}
+			c.Set("uid", res.User)
+			c.Set("pls", HasPlsPermission("user", res.User, "admin"))
+			c.Next()
 		} else if token.API != "" {
 			c.Set("uid", "")
 			c.Set("pls", HasPlsPermission("token", token.API, "admin"))
@@ -180,15 +153,14 @@ func Authenticate(apiKey string) gin.HandlerFunc {
 	}
 }
 
-func HasPlsPermission(tokenType string, tokenValue string, permission string) bool {
+func HasPlsPermission(tokenType, tokenValue, permission string) bool {
 	url := fmt.Sprintf("https://pls.datasektionen.se/api/%s/%s/hodis/%s", tokenType, tokenValue, permission)
 	resp, err := http.Get(url)
 	if err != nil {
 		return false
 	}
 	defer resp.Body.Close()
-	scanner := bufio.NewScanner(resp.Body)
-	if scanner.Scan() && scanner.Text() != "true" {
+	if b, err := ioutil.ReadAll(resp.Body); err != nil || string(b) != "true" {
 		return false
 	}
 	return true
