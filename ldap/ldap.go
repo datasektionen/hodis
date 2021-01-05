@@ -1,4 +1,4 @@
-package main
+package ldap
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/datasektionen/hodis/models"
 
 	"github.com/jinzhu/gorm"
 	"gopkg.in/ldap.v2"
@@ -37,10 +39,10 @@ func LdapInit(ldapHost string, ldapPort int, baseDn string, db *gorm.DB) {
 
 var ldapAttributes = []string{"ugUsername", "ugKthid", "givenName", "displayName", "mail", "cn"}
 
-func Search(query string) (Users, error) {
+func Search(query string) (models.Users, error) {
 	query = strings.ToLower(query)
 
-	var dbResults Users
+	var dbResults models.Users
 	s.db.Where("uid = ? OR ug_kthid = ? OR LOWER(cn) LIKE ?", query, query, fmt.Sprintf("%%%s%%", query)).Find(&dbResults)
 
 	filter := fmt.Sprintf("(|(displayName=*%s*)(ugUsername=%s)(ugKthid=%s))", query, query, query)
@@ -62,49 +64,49 @@ func Search(query string) (Users, error) {
 	return uniqueUsers(userResults, dbResults), nil
 }
 
-func ExactUid(query string) (User, error) {
-	user, err := searchDB(User{Uid: query})
+func ExactUid(query string) (models.User, error) {
+	user, err := searchDB(models.User{Uid: query})
 	if err != nil {
 		return exactSearch(query, "ugUsername")
 	}
 	return user, nil
 }
 
-func ExactUgid(query string) (User, error) {
-	user, err := searchDB(User{UgKthid: query})
+func ExactUgid(query string) (models.User, error) {
+	user, err := searchDB(models.User{UgKthid: query})
 	if err != nil {
 		return exactSearch(query, "ugKthid")
 	}
 	return user, nil
 }
 
-func searchDB(u User) (User, error) {
-	var user User
+func searchDB(u models.User) (models.User, error) {
+	var user models.User
 	s.db.Where(u).First(&user)
 	if user.UgKthid == "" {
-		return User{}, errors.New("no such user found")
+		return models.User{}, errors.New("no such user found")
 	}
 	user.Refs++
 	s.db.Save(&user)
 	return user, nil
 }
 
-func exactSearch(query string, ldapField string) (User, error) {
+func exactSearch(query string, ldapField string) (models.User, error) {
 	users, err := searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
 	if err != nil {
-		return User{}, err
+		return models.User{}, err
 	}
 
 	l := len(users)
 	if l == 0 {
-		return User{}, fmt.Errorf("exact search failed: No such user exists")
+		return models.User{}, fmt.Errorf("exact search failed: No such user exists")
 	} else if l > 1 {
-		return User{}, fmt.Errorf("exact search failed: Got multiple results")
+		return models.User{}, fmt.Errorf("exact search failed: Got multiple results")
 	}
 	return users[0], nil
 }
 
-func searchLDAP(filter string) ([]User, error) {
+func searchLDAP(filter string) ([]models.User, error) {
 	l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", s.ldapHost, s.ldapPort))
 	if err != nil {
 		return nil, fmt.Errorf("Dial failed: %s", err.Error())
@@ -137,7 +139,7 @@ func searchLDAP(filter string) ([]User, error) {
 	// Update the db asynchronously
 	go func() {
 		for _, value := range userResults {
-			var user User
+			var user models.User
 			s.db.First(&user, "ug_kthid = ?", value.UgKthid)
 			if user.Uid == "" {
 				s.db.Create(&value)
@@ -160,10 +162,10 @@ func searchLDAP(filter string) ([]User, error) {
 	return userResults, nil
 }
 
-func entriesToUsers(entries *[]*ldap.Entry) Users {
-	res := make(Users, len(*entries))
+func entriesToUsers(entries *[]*ldap.Entry) models.Users {
+	res := make(models.Users, len(*entries))
 	for i, entry := range *entries {
-		res[i] = User{
+		res[i] = models.User{
 			Cn:          entry.GetAttributeValue("cn"),
 			Uid:         entry.GetAttributeValue("ugUsername"),
 			UgKthid:     entry.GetAttributeValue("ugKthid"),
@@ -176,15 +178,15 @@ func entriesToUsers(entries *[]*ldap.Entry) Users {
 	return res
 }
 
-func uniqueUsers(lists ...[]User) []User {
-	m := make(map[string]User)
+func uniqueUsers(lists ...[]models.User) []models.User {
+	m := make(map[string]models.User)
 	for _, list := range lists {
 		for _, user := range list {
 			m[user.UgKthid] = user
 		}
 	}
 
-	res := make(Users, 0, len(m))
+	res := make(models.Users, 0, len(m))
 	for _, user := range m {
 		res = append(res, user)
 	}

@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"encoding/json"
@@ -6,13 +6,16 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/datasektionen/hodis/ldap"
+	"github.com/datasektionen/hodis/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 )
 
 func Cache(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var users Users
+		var users models.Users
 		db.Find(&users)
 		c.JSON(200, gin.H{"cache": users, "length": len(users)})
 	}
@@ -20,7 +23,7 @@ func Cache(db *gorm.DB) gin.HandlerFunc {
 
 func UserSearch(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		res, err := Search(c.Param("query"))
+		res, err := ldap.Search(c.Param("query"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -31,7 +34,7 @@ func UserSearch(db *gorm.DB) gin.HandlerFunc {
 
 func Uid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		res, err := ExactUid(c.Param("uid"))
+		res, err := ldap.ExactUid(c.Param("uid"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -42,7 +45,7 @@ func Uid(db *gorm.DB) gin.HandlerFunc {
 
 func UgKthid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		res, err := ExactUgid(c.Param("ugid"))
+		res, err := ldap.ExactUgid(c.Param("ugid"))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -53,8 +56,8 @@ func UgKthid(db *gorm.DB) gin.HandlerFunc {
 
 func Tag(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var user User
-		db.Where(User{Tag: c.Param("tag")}).First(&user)
+		var user models.User
+		db.Where(models.User{Tag: c.Param("tag")}).First(&user)
 		if user.Uid == "" {
 			c.JSON(404, gin.H{"error": "Found no such tag"})
 			return
@@ -65,7 +68,7 @@ func Tag(db *gorm.DB) gin.HandlerFunc {
 
 func Update(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		data := c.MustGet("data").(User)
+		data := c.MustGet("data").(models.User)
 		// Nobody can change UgKthid
 		data.UgKthid = ""
 
@@ -76,13 +79,13 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 			data.Uid = ""
 		}
 
-		ExactUid(c.Param("uid"))
+		ldap.ExactUid(c.Param("uid"))
 		if uid != c.Param("uid") && !pls {
 			c.JSON(401, gin.H{"error": "Permission denied."})
 			return
 		}
-		var user User
-		db.Where(User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
+		var user models.User
+		db.Where(models.User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
 		c.JSON(200, user)
 	}
 }
@@ -97,7 +100,7 @@ func CORS() gin.HandlerFunc {
 
 func BodyParser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		body := Body{}
+		body := models.Body{}
 		c.Bind(&body)
 		c.Set("data", body.User)
 		c.Set("token", body.Token)
@@ -118,7 +121,7 @@ func Authenticate(apiKey string) gin.HandlerFunc {
 			return
 		}
 
-		token := c.MustGet("token").(Token)
+		token := c.MustGet("token").(models.Token)
 		if token.Login != "" {
 			url := fmt.Sprintf("https://login.datasektionen.se/verify/%s?api_key=%s", token.Login, apiKey)
 			resp, err := http.Get(url)
