@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -17,8 +18,7 @@ type settings struct {
 	ldapHost string
 	ldapPort int
 
-	baseDn     string
-	attributes []string
+	baseDn string
 
 	db *gorm.DB
 }
@@ -27,14 +27,15 @@ var s settings
 
 func LdapInit(ldapHost string, ldapPort int, baseDn string, db *gorm.DB) {
 	s = settings{
-		new(sync.Map),
-		ldapHost,
-		ldapPort,
-		baseDn,
-		[]string{"ugUsername", "ugKthid", "givenName", "displayName", "mail", "cn"},
-		db,
+		queries:  new(sync.Map),
+		ldapHost: ldapHost,
+		ldapPort: ldapPort,
+		baseDn:   baseDn,
+		db:       db,
 	}
 }
+
+var ldapAttributes = []string{"ugUsername", "ugKthid", "givenName", "displayName", "mail", "cn"}
 
 func Search(query string) (Users, error) {
 	query = strings.ToLower(query)
@@ -62,46 +63,45 @@ func Search(query string) (Users, error) {
 }
 
 func ExactUid(query string) (User, error) {
-	return exactSearch(query, "ugUsername")
+	user, err := searchDB(User{Uid: query})
+	if err != nil {
+		return exactSearch(query, "ugUsername")
+	}
+	return user, nil
 }
 
 func ExactUgid(query string) (User, error) {
-	return exactSearch(query, "ugKthid")
+	user, err := searchDB(User{UgKthid: query})
+	if err != nil {
+		return exactSearch(query, "ugKthid")
+	}
+	return user, nil
+}
+
+func searchDB(u User) (User, error) {
+	var user User
+	s.db.Where(u).First(&user)
+	if user.UgKthid == "" {
+		return User{}, errors.New("no such user found")
+	}
+	user.Refs++
+	s.db.Save(&user)
+	return user, nil
 }
 
 func exactSearch(query string, ldapField string) (User, error) {
-	var user User
-	userFound := false
-	if ldapField == "ugUsername" {
-		s.db.Where(User{Uid: query}).First(&user)
-		userFound = user.Uid != ""
-	} else if ldapField == "ugKthid" {
-		s.db.Where(User{UgKthid: query}).First(&user)
-		userFound = user.UgKthid != ""
-	}
-
-	if userFound {
-		//Add an arbitrary ref to the user
-		user.Refs++
-		s.db.Save(&user)
-
-		//Posibly fix missing fields
-		//This should be removed in the future
-		go searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
-		return user, nil
-	}
-
 	users, err := searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
 	if err != nil {
-		return user, err
+		return User{}, err
 	}
 
-	if len(users) == 1 {
-		return users[0], nil
-	} else if len(users) > 1 {
-		return user, fmt.Errorf("exact search failed: Got multiple results")
+	l := len(users)
+	if l == 0 {
+		return User{}, fmt.Errorf("exact search failed: No such user exists")
+	} else if l > 1 {
+		return User{}, fmt.Errorf("exact search failed: Got multiple results")
 	}
-	return user, fmt.Errorf("exact search failed: No such user exists")
+	return users[0], nil
 }
 
 func searchLDAP(filter string) ([]User, error) {
@@ -113,9 +113,13 @@ func searchLDAP(filter string) ([]User, error) {
 
 	ldapSearchRequest := ldap.NewSearchRequest(
 		s.baseDn,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
 		filter,
-		s.attributes,
+		ldapAttributes,
 		nil,
 	)
 
@@ -130,20 +134,19 @@ func searchLDAP(filter string) ([]User, error) {
 
 	userResults := entriesToUsers(&res.Entries)
 
-	//Update the db asynchronously
+	// Update the db asynchronously
 	go func() {
 		for _, value := range userResults {
-			user := User{Uid: ""}
+			var user User
 			s.db.First(&user, "ug_kthid = ?", value.UgKthid)
-
 			if user.Uid == "" {
 				s.db.Create(&value)
 			} else {
-				//Add some arbitrary decay to the the users refs
+				// Add some arbitrary decay to the the users refs
 				user.Refs = uint(float64(user.Refs) * 0.9)
 
-				//Update names to match new base DN
-				//These should be removed in the future
+				// Update names to match new base DN
+				// These should be removed in the future
 				user.Cn = value.Cn
 				user.GivenName = value.GivenName
 				user.DisplayName = value.DisplayName
@@ -159,7 +162,6 @@ func searchLDAP(filter string) ([]User, error) {
 
 func entriesToUsers(entries *[]*ldap.Entry) Users {
 	res := make(Users, len(*entries))
-
 	for i, entry := range *entries {
 		res[i] = User{
 			Cn:          entry.GetAttributeValue("cn"),
@@ -176,7 +178,6 @@ func entriesToUsers(entries *[]*ldap.Entry) Users {
 
 func uniqueUsers(lists ...[]User) []User {
 	m := make(map[string]User)
-
 	for _, list := range lists {
 		for _, user := range list {
 			m[user.UgKthid] = user
@@ -184,7 +185,6 @@ func uniqueUsers(lists ...[]User) []User {
 	}
 
 	res := make(Users, 0, len(m))
-
 	for _, user := range m {
 		res = append(res, user)
 	}

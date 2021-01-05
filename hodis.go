@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -24,9 +25,8 @@ func main() {
 		r.GET("/cache", Cache(db))
 	}
 	if err != nil {
-		panic("Failed to connect database")
+		log.Fatalln("Failed to connect database")
 	}
-
 	defer db.Close()
 	db.AutoMigrate(&User{})
 
@@ -34,9 +34,10 @@ func main() {
 	r.Use(CORS())
 
 	loginKey := os.Getenv("LOGIN_API_KEY")
-	if loginKey != "" {
-		r.Use(Authenticate(loginKey))
+	if loginKey == "" {
+		log.Fatalln("Please specify LOGIN_API_KEY")
 	}
+	r.Use(Authenticate(loginKey))
 
 	r.GET("/users/:query", UserSearch(db))
 	r.GET("/uid/:uid", Uid(db))
