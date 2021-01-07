@@ -1,19 +1,19 @@
-package handlers
+package server
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 
-	"github.com/datasektionen/hodis/ldap"
-	"github.com/datasektionen/hodis/models"
+	"github.com/datasektionen/hodis/server/ldap"
+	"github.com/datasektionen/hodis/server/models"
+	"github.com/datasektionen/hodis/server/pls"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 )
 
-func Cache(db *gorm.DB) gin.HandlerFunc {
+func cache(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var users models.Users
 		db.Find(&users)
@@ -21,7 +21,7 @@ func Cache(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func UserSearch(db *gorm.DB) gin.HandlerFunc {
+func userSearch(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		res, err := ldap.Search(c.Param("query"))
 		if err != nil {
@@ -32,7 +32,7 @@ func UserSearch(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func Uid(db *gorm.DB) gin.HandlerFunc {
+func uid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		res, err := ldap.ExactUid(c.Param("uid"))
 		if err != nil {
@@ -43,7 +43,7 @@ func Uid(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func UgKthid(db *gorm.DB) gin.HandlerFunc {
+func ugKthid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		res, err := ldap.ExactUgid(c.Param("ugid"))
 		if err != nil {
@@ -54,7 +54,7 @@ func UgKthid(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func Tag(db *gorm.DB) gin.HandlerFunc {
+func tag(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var user models.User
 		db.Where(models.User{Tag: c.Param("tag")}).First(&user)
@@ -66,7 +66,7 @@ func Tag(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func Update(db *gorm.DB) gin.HandlerFunc {
+func update(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		data := c.MustGet("data").(models.User)
 		// Nobody can change UgKthid
@@ -90,7 +90,7 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func CORS() gin.HandlerFunc {
+func cors() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Headers", "Content-Type")
@@ -98,7 +98,7 @@ func CORS() gin.HandlerFunc {
 	}
 }
 
-func BodyParser() gin.HandlerFunc {
+func bodyParser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := models.Body{}
 		c.Bind(&body)
@@ -112,7 +112,7 @@ type verified struct {
 	User string `json:"user"`
 }
 
-func Authenticate(apiKey string) gin.HandlerFunc {
+func authenticate(apiKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "GET" ||
 			c.Request.Method == "HEAD" ||
@@ -143,11 +143,11 @@ func Authenticate(apiKey string) gin.HandlerFunc {
 				return
 			}
 			c.Set("uid", res.User)
-			c.Set("pls", HasPlsPermission("user", res.User, "admin"))
+			c.Set("pls", pls.HasPermission("user", res.User, "admin"))
 			c.Next()
 		} else if token.API != "" {
 			c.Set("uid", "")
-			c.Set("pls", HasPlsPermission("token", token.API, "admin"))
+			c.Set("pls", pls.HasPermission("token", token.API, "admin"))
 			c.Next()
 		} else {
 			c.JSON(400, gin.H{"error": "Missing token"})
@@ -156,20 +156,7 @@ func Authenticate(apiKey string) gin.HandlerFunc {
 	}
 }
 
-func HasPlsPermission(tokenType, tokenValue, permission string) bool {
-	url := fmt.Sprintf("https://pls.datasektionen.se/api/%s/%s/hodis/%s", tokenType, tokenValue, permission)
-	resp, err := http.Get(url)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	if b, err := ioutil.ReadAll(resp.Body); err != nil || string(b) != "true" {
-		return false
-	}
-	return true
-}
-
-func Ping(db *gorm.DB) gin.HandlerFunc {
+func ping(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(200, "Pong")
 	}

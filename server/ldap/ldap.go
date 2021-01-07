@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/datasektionen/hodis/models"
+	"github.com/datasektionen/hodis/server/models"
 
 	"github.com/jinzhu/gorm"
 	"gopkg.in/ldap.v2"
