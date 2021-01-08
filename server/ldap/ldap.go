@@ -1,120 +1,72 @@
 package ldap
 
 import (
-	"errors"
 	"fmt"
 	"log"
-	"sort"
-	"strings"
-	"sync"
 
 	"github.com/datasektionen/hodis/server/models"
-
-	"github.com/jinzhu/gorm"
 	"gopkg.in/ldap.v2"
 )
 
-type settings struct {
-	queries *sync.Map
-
-	ldapHost string
-	ldapPort int
-
-	baseDn string
-
-	db *gorm.DB
+type Ldap interface {
+	Search(query string) ([]models.User, error)
+	ExactUid(uid string) (models.User, error)
+	ExactUgid(ugkthid string) (models.User, error)
 }
 
-var s settings
-
-func LdapInit(ldapHost string, ldapPort int, baseDn string, db *gorm.DB) {
-	s = settings{
-		queries:  new(sync.Map),
-		ldapHost: ldapHost,
-		ldapPort: ldapPort,
-		baseDn:   baseDn,
-		db:       db,
-	}
+type ldapImpl struct {
+	LdapHost string
 }
+
+func New(ldapHost string) Ldap {
+	return ldapImpl{LdapHost: ldapHost}
+}
+
+const baseDN = "ou=Addressbook,dc=kth,dc=se"
 
 var ldapAttributes = []string{"ugUsername", "ugKthid", "givenName", "displayName", "mail", "cn"}
 
-func Search(query string) (models.Users, error) {
-	query = strings.ToLower(query)
-
-	var dbResults models.Users
-	s.db.Where("uid = ? OR ug_kthid = ? OR LOWER(cn) LIKE ?", query, query, fmt.Sprintf("%%%s%%", query)).Find(&dbResults)
-
+func (l ldapImpl) Search(query string) ([]models.User, error) {
 	filter := fmt.Sprintf("(|(displayName=*%s*)(ugUsername=%s)(ugKthid=%s))", query, query, query)
-
-	if _, ok := s.queries.Load(query); ok || len(dbResults) >= 1000 {
-		sort.Slice(dbResults, func(i, j int) bool {
-			return dbResults[i].Refs > dbResults[j].Refs
-		})
-		return dbResults, nil
-	}
-
-	userResults, err := searchLDAP(filter)
+	users, err := l.search(filter)
 	if err != nil {
-		return nil, fmt.Errorf("LDAP search failed: %s", err.Error())
+		return nil, fmt.Errorf("LDAP search failed: %v", err)
 	}
-
-	s.queries.Store(query, nil)
-
-	return uniqueUsers(userResults, dbResults), nil
+	return users, nil
 }
 
-func ExactUid(query string) (models.User, error) {
-	user, err := searchDB(models.User{Uid: query})
-	if err != nil {
-		return exactSearch(query, "ugUsername")
-	}
-	return user, nil
+func (l ldapImpl) ExactUid(uid string) (models.User, error) {
+	return l.exactSearch(uid, "ugUsername")
 }
 
-func ExactUgid(query string) (models.User, error) {
-	user, err := searchDB(models.User{UgKthid: query})
-	if err != nil {
-		return exactSearch(query, "ugKthid")
-	}
-	return user, nil
+func (l ldapImpl) ExactUgid(ugkthid string) (models.User, error) {
+	return l.exactSearch(ugkthid, "ugKthid")
 }
 
-func searchDB(u models.User) (models.User, error) {
-	var user models.User
-	s.db.Where(u).First(&user)
-	if user.UgKthid == "" {
-		return models.User{}, errors.New("no such user found")
-	}
-	user.Refs++
-	s.db.Save(&user)
-	return user, nil
-}
-
-func exactSearch(query string, ldapField string) (models.User, error) {
-	users, err := searchLDAP(fmt.Sprintf("(%s=%s)", ldapField, query))
+func (l ldapImpl) exactSearch(query string, ldapField string) (models.User, error) {
+	users, err := l.search(fmt.Sprintf("(%s=%s)", ldapField, query))
 	if err != nil {
 		return models.User{}, err
 	}
 
-	l := len(users)
-	if l == 0 {
+	n := len(users)
+	if n == 0 {
 		return models.User{}, fmt.Errorf("exact search failed: No such user exists")
-	} else if l > 1 {
+	} else if n > 1 {
 		return models.User{}, fmt.Errorf("exact search failed: Got multiple results")
 	}
 	return users[0], nil
 }
 
-func searchLDAP(filter string) ([]models.User, error) {
-	l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", s.ldapHost, s.ldapPort))
+func (l ldapImpl) search(filter string) ([]models.User, error) {
+	conn, err := ldap.Dial("tcp", l.LdapHost)
 	if err != nil {
-		return nil, fmt.Errorf("Dial failed: %s", err.Error())
+		return nil, fmt.Errorf("Dial failed: %v", err)
 	}
-	defer l.Close()
+	defer conn.Close()
 
-	ldapSearchRequest := ldap.NewSearchRequest(
-		s.baseDn,
+	req := ldap.NewSearchRequest(
+		baseDN,
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
 		0,
@@ -125,7 +77,7 @@ func searchLDAP(filter string) ([]models.User, error) {
 		nil,
 	)
 
-	res, err := l.SearchWithPaging(ldapSearchRequest, 10)
+	res, err := conn.SearchWithPaging(req, 10)
 	if err != nil {
 		if len(res.Entries) > 0 {
 			log.Printf("%s but %d results, continuing.", err.Error(), len(res.Entries))
@@ -134,69 +86,5 @@ func searchLDAP(filter string) ([]models.User, error) {
 		}
 	}
 
-	userResults := entriesToUsers(&res.Entries)
-
-	// Update the db asynchronously
-	go func() {
-		for _, value := range userResults {
-			var user models.User
-			s.db.First(&user, "ug_kthid = ?", value.UgKthid)
-			if user.Uid == "" {
-				s.db.Create(&value)
-			} else {
-				// Add some arbitrary decay to the the users refs
-				user.Refs = uint(float64(user.Refs) * 0.9)
-
-				// Update names to match new base DN
-				// These should be removed in the future
-				user.Cn = value.Cn
-				user.GivenName = value.GivenName
-				user.DisplayName = value.DisplayName
-				user.Mail = value.Mail
-
-				s.db.Save(&user)
-			}
-		}
-	}()
-
-	return userResults, nil
-}
-
-func entriesToUsers(entries *[]*ldap.Entry) models.Users {
-	res := make(models.Users, len(*entries))
-	for i, entry := range *entries {
-		res[i] = models.User{
-			Cn:          entry.GetAttributeValue("cn"),
-			Uid:         entry.GetAttributeValue("ugUsername"),
-			UgKthid:     entry.GetAttributeValue("ugKthid"),
-			GivenName:   entry.GetAttributeValue("givenName"),
-			DisplayName: entry.GetAttributeValue("displayName"),
-			Mail:        entry.GetAttributeValue("mail"),
-		}
-	}
-
-	return res
-}
-
-func uniqueUsers(lists ...[]models.User) []models.User {
-	m := make(map[string]models.User)
-	for _, list := range lists {
-		for _, user := range list {
-			m[user.UgKthid] = user
-		}
-	}
-
-	res := make(models.Users, 0, len(m))
-	for _, user := range m {
-		res = append(res, user)
-	}
-
-	sort.Slice(res, func(i, j int) bool {
-		if res[i].Year == res[j].Year {
-			return res[i].Refs > res[j].Refs
-		}
-		return res[i].Year > res[j].Year
-	})
-
-	return res
+	return entriesToUsers(res.Entries), nil
 }
