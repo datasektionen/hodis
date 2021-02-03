@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/datasektionen/hodis/server/models"
+
 	"gopkg.in/ldap.v2"
 )
 

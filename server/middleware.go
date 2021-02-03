@@ -7,6 +7,7 @@ import (
 
 	"github.com/datasektionen/hodis/server/models"
 	"github.com/datasektionen/hodis/server/pls"
+
 	"github.com/gin-gonic/gin"
 )
 

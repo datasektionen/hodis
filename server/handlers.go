@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/datasektionen/hodis/server/models"
+
 	"github.com/gin-gonic/gin"
 )
 
