@@ -92,4 +92,4 @@ and `DATABASE_URL=postgres://hodis:hodis@localhost:5432/hodis?sslmode=disable`
 
 If you're at KTH, ldap should just work. Otherwise, create a tcp tunnel through
 mjukglass using something like: `ssh mjukglass -L 33389:ldap.kth.se:389` and set
-`LDAP_HOST` to localhost and `LDAP_PORT` to 389.
+`LDAP_HOST` to localhost and `LDAP_PORT` to 33389.
