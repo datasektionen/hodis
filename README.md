@@ -55,11 +55,13 @@ Authentication is done by specifying an `api_key` or a `token`. The API key is a
 
 ## Environment variables
 
-| Variable      | Description                   | Example                               |
-|---------------|-------------------------------|---------------------------------------|
-| LOGIN_API_KEY | API key for the Login system. | --                                    |
+| Variable      | Description                               | Example                               |
+|---------------|-------------------------------------------|---------------------------------------|
+| LOGIN_API_KEY | API key for the Login system.             | --                                    |
+| LOGIN_URL     | URL to the Login system.                  | https://login.datasektionen.se        |
+| LDAP_HOST     | hostname to kth:s ldap server.            | ldap.kth.se                           |
 | DATABASE_URL  | A postgresql database url.                | postgres://postgres:password@db:5432/ |
-| GIN_MODE      | Should be set to "release" in production. | 
+| GIN_MODE      | Should be set to "release" in production. | |
 
 ## Dependency on other systems at Datasektionen
 
@@ -76,6 +78,17 @@ Set environment variables according to "Environment variables", install go, run 
 
 ## Development setup
 
-????
+Make `DATABASE_URL` is corretly pointing to a postgres database. You can start one with:
+```sh
+docker run \
+    --name hodis-db -p 5432:5432 -d \
+    -e POSTGRES_PASSWORD=hodis \
+    -e POSTGRES_DB=hodis \
+    -e POSTGRES_USER=hodis \
+    postgres
+```
+and `DATABASE_URL=postgres://hodis:hodis@localhost:5432/hodis?sslmode=disable`
 
-No solution exists yet for interacting with ldap.
+If you're at KTH, ldap should just work. Otherwise, create a tcp tunnel through
+mjukglass using something like: `ssh mjukglass -L 389:ldap.kth.se:389` and set
+`LDAP_HOST` to localhost.
