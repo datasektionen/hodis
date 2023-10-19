@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/datasektionen/hodis/handlers"
 	"github.com/datasektionen/hodis/ldap"
@@ -21,14 +22,21 @@ func main() {
 
 	db, err = gorm.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Fatalln("Failed to connect database")
+		log.Fatalln("Failed to connect to database", err)
 	}
 
 	ldapHost := os.Getenv("LDAP_HOST")
 	if ldapHost == "" {
 		ldapHost = "ldap.kth.se"
 	}
-	ldap.LdapInit(ldapHost, 389, "ou=Addressbook,dc=kth,dc=se", db)
+	ldapPort := 389
+	if ldapPortStr := os.Getenv("LDAP_PORT"); ldapPortStr != "" {
+		ldapPort, err = strconv.Atoi(ldapPortStr)
+		if err != nil {
+			log.Fatalln("Invalid number in $LDAP_PORT", err)
+		}
+	}
+	ldap.LdapInit(ldapHost, ldapPort, "ou=Addressbook,dc=kth,dc=se", db)
 
 	defer db.Close()
 	db.AutoMigrate(&models.User{})

@@ -60,6 +60,7 @@ Authentication is done by specifying an `api_key` or a `token`. The API key is a
 | LOGIN_API_KEY | API key for the Login system.             | --                                    |
 | LOGIN_URL     | URL to the Login system.                  | https://login.datasektionen.se        |
 | LDAP_HOST     | hostname to kth:s ldap server.            | ldap.kth.se                           |
+| LDAP_PORT     | tcp to kth:s ldap server.                 | 389                                   |
 | DATABASE_URL  | A postgresql database url.                | postgres://postgres:password@db:5432/ |
 | GIN_MODE      | Should be set to "release" in production. | |
 
@@ -90,5 +91,5 @@ docker run \
 and `DATABASE_URL=postgres://hodis:hodis@localhost:5432/hodis?sslmode=disable`
 
 If you're at KTH, ldap should just work. Otherwise, create a tcp tunnel through
-mjukglass using something like: `ssh mjukglass -L 389:ldap.kth.se:389` and set
-`LDAP_HOST` to localhost.
+mjukglass using something like: `ssh mjukglass -L 33389:ldap.kth.se:389` and set
+`LDAP_HOST` to localhost and `LDAP_PORT` to 389.
