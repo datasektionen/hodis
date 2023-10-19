@@ -112,7 +112,7 @@ type verified struct {
 	User string `json:"user"`
 }
 
-func Authenticate(apiKey string) gin.HandlerFunc {
+func Authenticate(loginURL, apiKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "GET" ||
 			c.Request.Method == "HEAD" ||
@@ -123,7 +123,7 @@ func Authenticate(apiKey string) gin.HandlerFunc {
 
 		token := c.MustGet("token").(models.Token)
 		if token.Login != "" {
-			url := fmt.Sprintf("https://login.datasektionen.se/verify/%s?api_key=%s", token.Login, apiKey)
+			url := fmt.Sprintf("%s/verify/%s?api_key=%s", loginURL, token.Login, apiKey)
 			resp, err := http.Get(url)
 			if err != nil {
 				c.JSON(500, gin.H{"error": err})
