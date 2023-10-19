@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type Body struct {
 	User
 	Token
@@ -13,8 +15,10 @@ type User struct {
 	GivenName   string `form:"givenName"   json:"givenName"`
 	DisplayName string `form:"displayName" json:"displayName"`
 
-	Year int    `form:"year"        json:"year"`
-	Tag  string `form:"tag"         json:"tag"`
+	// The date they are currently known to be chapter members until.
+	MemberTo *time.Time `form:"memberTo" json:"memberTo"`
+	Year     int        `form:"year"     json:"year"`
+	Tag      string     `form:"tag"      json:"tag"`
 
 	Refs uint `json:"-"`
 }
