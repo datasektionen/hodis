@@ -73,14 +73,14 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 		data.UgKthid = ""
 
 		uid := c.MustGet("uid").(string)
-		pls := c.MustGet("pls").(bool)
-		if !pls {
+		admin := c.MustGet("admin").(bool)
+		if !admin {
 			// No admin? No change
 			data.Uid = ""
 		}
 
 		ldap.ExactUid(c.Param("uid"))
-		if uid != c.Param("uid") && !pls {
+		if uid != c.Param("uid") && !admin {
 			c.JSON(401, gin.H{"error": "Permission denied."})
 			return
 		}
@@ -143,11 +143,11 @@ func Authenticate(loginURL, apiKey string) gin.HandlerFunc {
 				return
 			}
 			c.Set("uid", res.User)
-			c.Set("pls", HasPlsPermission("user", res.User, "admin"))
+			c.Set("admin", HasPlsPermission("user", res.User, "admin"))
 			c.Next()
 		} else if token.API != "" {
 			c.Set("uid", "")
-			c.Set("pls", HasPlsPermission("token", token.API, "admin"))
+			c.Set("admin", HasPlsPermission("token", token.API, "admin"))
 			c.Next()
 		} else {
 			c.JSON(400, gin.H{"error": "Missing token"})
