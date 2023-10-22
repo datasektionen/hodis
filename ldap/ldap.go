@@ -138,21 +138,10 @@ func searchLDAP(filter string) ([]models.User, error) {
 
 	// Update the db asynchronously
 	go func() {
-		for _, value := range userResults {
-			var user models.User
-			s.db.First(&user, "ug_kthid = ?", value.UgKthid)
-			if user.Uid == "" {
-				s.db.Create(&value)
-			} else {
+		for _, user := range userResults {
+			if s.db.FirstOrCreate(&user, "ug_kthid = ?", user.UgKthid).RowsAffected == 0 {
 				// Add some arbitrary decay to the the users refs
 				user.Refs = uint(float64(user.Refs) * 0.9)
-
-				// Update names to match new base DN
-				// These should be removed in the future
-				user.Cn = value.Cn
-				user.GivenName = value.GivenName
-				user.DisplayName = value.DisplayName
-				user.Mail = value.Mail
 
 				s.db.Save(&user)
 			}
