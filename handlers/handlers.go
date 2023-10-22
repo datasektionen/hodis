@@ -190,6 +190,9 @@ func MembershipSheet(db *gorm.DB) gin.HandlerFunc {
 
 			memberTo, err := time.Parse(time.DateOnly, date)
 
+			// Note that although very common, everyone's kth email is not their kth id followed by
+			// @kth.se. KTH:s ldap can however not be searched by emails, so I don't know of a good
+			// solution.
 			uid := strings.TrimSuffix(email, "@kth.se")
 			var user models.User
 			db.Where(models.User{Uid: uid}).First(&user)
