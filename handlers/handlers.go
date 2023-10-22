@@ -94,6 +94,12 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+const (
+	sheetDateCol    = "Giltig till"
+	sheetEmailCol   = "E-postadress"
+	sheetChapterCol = "Grupp"
+)
+
 func MembershipSheet(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		admin := c.MustGet("admin").(bool)
@@ -133,11 +139,11 @@ func MembershipSheet(db *gorm.DB) gin.HandlerFunc {
 		var dateCol, emailCol, chapterCol int = -1, -1, -1
 		for i, title := range columns {
 			title = strings.TrimSpace(title)
-			if title == "Giltig till" {
+			if title == sheetDateCol {
 				dateCol = i
-			} else if title == "E-postadress" {
+			} else if title == sheetEmailCol {
 				emailCol = i
-			} else if title == "Grupp" {
+			} else if title == sheetChapterCol {
 				chapterCol = i
 			}
 		}
