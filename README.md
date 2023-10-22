@@ -79,7 +79,7 @@ Set environment variables according to "Environment variables", install go, run 
 
 ## Development setup
 
-Make `DATABASE_URL` is corretly pointing to a postgres database. You can start one with:
+`DATABASE_URL` should point to a postgresql database. You can start one with:
 ```sh
 docker run \
     --name hodis-db -p 5432:5432 -d \
@@ -88,8 +88,8 @@ docker run \
     -e POSTGRES_USER=hodis \
     postgres
 ```
-and `DATABASE_URL=postgres://hodis:hodis@localhost:5432/hodis?sslmode=disable`
+and use the following: `DATABASE_URL=postgres://hodis:hodis@localhost:5432/hodis?sslmode=disable`
 
-If you're at KTH, ldap should just work. Otherwise, create a tcp tunnel through
+If you're at KTH, ldap might just work (?). Otherwise, create a tcp tunnel through
 mjukglass using something like: `ssh mjukglass -L 33389:ldap.kth.se:389` and set
 `LDAP_HOST` to localhost and `LDAP_PORT` to 33389.
