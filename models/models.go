@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type Body struct {
 	User
 	Token
@@ -13,8 +15,11 @@ type User struct {
 	GivenName   string `form:"givenName"   json:"givenName"`
 	DisplayName string `form:"displayName" json:"displayName"`
 
-	Year int    `form:"year"        json:"year"`
-	Tag  string `form:"tag"         json:"tag"`
+	// Should not be considered when `PermanentMember` is true
+	MemberTo        *time.Time `form:"memberTo"        json:"memberTo"`
+	PermanentMember bool       `form:"permanentMember" json:"permanentMember" gorm:"default:false"`
+	Year            int        `form:"year"            json:"year"`
+	Tag             string     `form:"tag"             json:"tag"`
 
 	Refs uint `json:"-"`
 }
