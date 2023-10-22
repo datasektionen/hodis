@@ -200,19 +200,17 @@ func MembershipSheet(db *gorm.DB) gin.HandlerFunc {
 				errorRows = append(errorRows, email)
 				continue
 			}
-			if user.MemberTo == nil || *user.MemberTo != models.MemberToForever {
-				user.MemberTo = &memberTo
-				var err error
-				if inDB {
-					err = db.Save(&user).Error
-				} else {
-					err = db.Create(&user).Error
-				}
-				if err != nil {
-					log.Println(email, err)
-					errorRows = append(errorRows, email)
-					continue
-				}
+			user.MemberTo = &memberTo
+			err = nil
+			if inDB {
+				err = db.Save(&user).Error
+			} else {
+				err = db.Create(&user).Error
+			}
+			if err != nil {
+				log.Println(email, err)
+				errorRows = append(errorRows, email)
+				continue
 			}
 		}
 		c.JSON(200, gin.H{"erroring-rows": errorRows})
