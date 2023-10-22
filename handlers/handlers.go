@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/datasektionen/hodis/ldap"
 	"github.com/datasektionen/hodis/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/xuri/excelize/v2"
 )
 
 func Cache(db *gorm.DB) gin.HandlerFunc {
@@ -90,6 +94,131 @@ func Update(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+func MembershipSheet(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		admin := c.MustGet("admin").(bool)
+		if !admin {
+			c.JSON(401, gin.H{"error": "Permission denied."})
+			return
+		}
+
+		sheet, err := excelize.OpenReader(c.Request.Body)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
+		if sheet.SheetCount < 1 {
+			c.JSON(400, gin.H{"error": "found no sheets in the provided file"})
+			c.Abort()
+			return
+		}
+		rows, err := sheet.Rows(sheet.GetSheetName(0))
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
+		if !rows.Next() {
+			c.JSON(400, gin.H{"error": "no header row found"})
+			c.Abort()
+			return
+		}
+		columns, err := rows.Columns()
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
+		var dateCol, emailCol, chapterCol int = -1, -1, -1
+		for i, title := range columns {
+			title = strings.TrimSpace(title)
+			if title == "Giltig till" {
+				dateCol = i
+			} else if title == "E-postadress" {
+				emailCol = i
+			} else if title == "Grupp" {
+				chapterCol = i
+			}
+		}
+		if dateCol == -1 {
+			c.JSON(400, gin.H{"error": "couldn't find a column for dates"})
+			c.Abort()
+			return
+		}
+		if emailCol == -1 {
+			c.JSON(400, gin.H{"error": "couldn't find a column for emails"})
+			c.Abort()
+			return
+		}
+		if chapterCol == -1 {
+			c.JSON(400, gin.H{"error": "couldn't find a column for chapters"})
+			c.Abort()
+			return
+		}
+		now := time.Now()
+		errorRows := make([]string, 0)
+		for rows.Next() {
+			columns, err := rows.Columns()
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				c.Abort()
+				return
+			}
+			if len(columns) == 0 {
+				continue
+			}
+			if dateCol >= len(columns) || emailCol >= len(columns) || chapterCol >= len(columns) {
+				log.Printf("Some column (of %d, %d, %d) not found on row with length %d\n", dateCol, emailCol, chapterCol, len(columns))
+				errorRows = append(errorRows, strings.Join(columns, ","))
+				continue
+			}
+			date := columns[dateCol]
+			email := columns[emailCol]
+			chapter := columns[chapterCol]
+
+			if !strings.Contains(chapter, "Datasektionen") {
+				if err := db.Model(models.User{}).
+					Where(models.User{Mail: email}).
+					Updates(models.User{MemberTo: &now}).
+					Error; err != nil {
+					log.Println(email, err)
+					errorRows = append(errorRows, email)
+				}
+				continue
+			}
+
+			memberTo, err := time.Parse(time.DateOnly, date)
+
+			uid := strings.TrimSuffix(email, "@kth.se")
+			var user models.User
+			db.Where(models.User{Uid: uid}).First(&user)
+			inDB := user.UgKthid != ""
+			user, err = ldap.ExactUid(uid)
+			if err != nil {
+				log.Println(email, err)
+				errorRows = append(errorRows, email)
+				continue
+			}
+			if user.MemberTo == nil || *user.MemberTo != models.MemberToForever {
+				user.MemberTo = &memberTo
+				var err error
+				if inDB {
+					err = db.Save(&user).Error
+				} else {
+					err = db.Create(&user).Error
+				}
+				if err != nil {
+					log.Println(email, err)
+					errorRows = append(errorRows, email)
+					continue
+				}
+			}
+		}
+		c.JSON(200, gin.H{"erroring-rows": errorRows})
+	}
+}
+
 func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -106,6 +235,13 @@ func BodyParser() gin.HandlerFunc {
 		c.Set("token", body.Token)
 		c.Next()
 	}
+}
+
+func HeaderParser(c *gin.Context) {
+	c.Set("token", models.Token{
+		Login: c.GetHeader("X-Token"),
+		API:   c.GetHeader("X-Api-Key"),
+	})
 }
 
 type verified struct {

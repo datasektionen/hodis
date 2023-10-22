@@ -45,9 +45,6 @@ func main() {
 		r.GET("/cache", handlers.Cache(db))
 	}
 
-	r.Use(handlers.BodyParser())
-	r.Use(handlers.CORS())
-
 	loginURL := os.Getenv("LOGIN_URL")
 	if loginURL == "" {
 		loginURL = "https://login.datasektionen.se"
@@ -56,7 +53,14 @@ func main() {
 	if loginKey == "" {
 		log.Fatalln("Please specify LOGIN_API_KEY")
 	}
-	r.Use(handlers.Authenticate(loginURL, loginKey))
+	auth := handlers.Authenticate(loginURL, loginKey)
+
+	r.POST("/membership-sheet", handlers.HeaderParser, auth, handlers.MembershipSheet(db))
+
+	r.Use(handlers.BodyParser())
+	r.Use(handlers.CORS())
+
+	r.Use(auth)
 
 	r.GET("/users/:query", handlers.UserSearch(db))
 	r.GET("/uid/:uid", handlers.Uid(db))
