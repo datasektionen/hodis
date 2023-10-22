@@ -53,7 +53,11 @@ func main() {
 	if loginKey == "" {
 		log.Fatalln("Please specify LOGIN_API_KEY")
 	}
-	auth := handlers.Authenticate(loginURL, loginKey)
+	plsURL := os.Getenv("PLS_URL")
+	if loginKey == "" {
+		plsURL = "https://pls.datasektionen.se"
+	}
+	auth := handlers.Authenticate(loginURL, loginKey, plsURL)
 
 	r.POST("/membership-sheet", handlers.HeaderParser, auth, handlers.MembershipSheet(db))
 

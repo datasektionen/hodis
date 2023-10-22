@@ -249,7 +249,7 @@ type verified struct {
 	User string `json:"user"`
 }
 
-func Authenticate(loginURL, apiKey string) gin.HandlerFunc {
+func Authenticate(loginURL, apiKey, plsURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "GET" ||
 			c.Request.Method == "HEAD" ||
@@ -280,11 +280,11 @@ func Authenticate(loginURL, apiKey string) gin.HandlerFunc {
 				return
 			}
 			c.Set("uid", res.User)
-			c.Set("admin", HasPlsPermission("user", res.User, "admin"))
+			c.Set("admin", HasPlsPermission(plsURL, "user", res.User, "admin"))
 			c.Next()
 		} else if token.API != "" {
 			c.Set("uid", "")
-			c.Set("admin", HasPlsPermission("token", token.API, "admin"))
+			c.Set("admin", HasPlsPermission(plsURL, "token", token.API, "admin"))
 			c.Next()
 		} else {
 			c.JSON(400, gin.H{"error": "Missing token"})
@@ -293,8 +293,13 @@ func Authenticate(loginURL, apiKey string) gin.HandlerFunc {
 	}
 }
 
-func HasPlsPermission(tokenType, tokenValue, permission string) bool {
-	url := fmt.Sprintf("https://pls.datasektionen.se/api/%s/%s/hodis/%s", tokenType, tokenValue, permission)
+func HasPlsPermission(plsURL, tokenType, tokenValue, permission string) bool {
+	if plsURL == "true" {
+		return true
+	} else if plsURL == "false" {
+		return false
+	}
+	url := fmt.Sprintf("%s/api/%s/%s/hodis/%s", plsURL, tokenType, tokenValue, permission)
 	resp, err := http.Get(url)
 	if err != nil {
 		return false

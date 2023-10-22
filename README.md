@@ -59,6 +59,7 @@ Authentication is done by specifying an `api_key` or a `token`. The API key is a
 |---------------|-------------------------------------------|---------------------------------------|
 | LOGIN_API_KEY | API key for the Login system.             | --                                    |
 | LOGIN_URL     | URL to the Login system.                  | https://login.datasektionen.se        |
+| PLS_URL       | URL to pls.                               | https://pls.datasektionen.se          |
 | LDAP_HOST     | hostname to kth:s ldap server.            | ldap.kth.se                           |
 | LDAP_PORT     | tcp to kth:s ldap server.                 | 389                                   |
 | DATABASE_URL  | A postgresql database url.                | postgres://postgres:password@db:5432/ |
@@ -93,3 +94,6 @@ and use the following: `DATABASE_URL=postgres://hodis:hodis@localhost:5432/hodis
 If you're at KTH, ldap might just work (?). Otherwise, create a tcp tunnel through
 mjukglass using something like: `ssh mjukglass -L 33389:ldap.kth.se:389` and set
 `LDAP_HOST` to localhost and `LDAP_PORT` to 33389.
+
+To not use pls for verifying api keys, you can set `PLS_URL` to `true` or
+`false` to accept or reject any given api keys.
