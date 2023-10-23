@@ -12,9 +12,9 @@
     </style>
 </head>
 <body>
-    <h2>THS chapter member sheet</h2>
+    <h1>THS chapter member sheet</h1>
     <a class="login"></a>
-    <form class="sheet">
+    <form>
         <label for="sheet">File:</label>
         <input id="sheet" type="file">
         <br>
@@ -31,9 +31,9 @@
             login.href = "https://login.datasektionen.se/login?callback=" + location.href + "?code=";
             login.innerText = "login";
         }
-        const form = document.querySelector(".sheet");
-        const file = form.querySelector("#sheet");
-        const error = form.querySelector("#error");
+        const form = document.querySelector("form");
+        const file = document.querySelector("#sheet");
+        const error = document.querySelector("#error");
         form.onsubmit = async event => {
             event.preventDefault();
             error.innerHTML = "";

@@ -18,6 +18,9 @@ import (
 //go:embed admin.html
 var adminHTML []byte
 
+//go:embed index.html
+var indexHTML []byte
+
 func main() {
 	r := gin.Default()
 
@@ -77,6 +80,12 @@ func main() {
 	r.GET("/ping", handlers.Ping(db))
 	r.GET("/admin", func(c *gin.Context) {
 		_, err := c.Writer.Write(adminHTML)
+		if err != nil {
+			c.Error(err)
+		}
+	})
+	r.GET("/", func(c *gin.Context) {
+		_, err := c.Writer.Write(indexHTML)
 		if err != nil {
 			c.Error(err)
 		}
