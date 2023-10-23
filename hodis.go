@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"log"
 	"os"
 	"strconv"
@@ -13,6 +14,9 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
+
+//go:embed admin.html
+var adminHTML []byte
 
 func main() {
 	r := gin.Default()
@@ -54,7 +58,7 @@ func main() {
 		log.Fatalln("Please specify LOGIN_API_KEY")
 	}
 	plsURL := os.Getenv("PLS_URL")
-	if loginKey == "" {
+	if plsURL == "" {
 		plsURL = "https://pls.datasektionen.se"
 	}
 	auth := handlers.Authenticate(loginURL, loginKey, plsURL)
@@ -71,6 +75,12 @@ func main() {
 	r.GET("/ugkthid/:ugid", handlers.UgKthid(db))
 	r.GET("/tag/:tag", handlers.Tag(db))
 	r.GET("/ping", handlers.Ping(db))
+	r.GET("/admin", func(c *gin.Context) {
+		_, err := c.Writer.Write(adminHTML)
+		if err != nil {
+			c.Error(err)
+		}
+	})
 
 	r.POST("/uid/:uid", handlers.Update(db))
 
