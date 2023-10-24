@@ -92,6 +92,7 @@ func main() {
 	})
 
 	r.POST("/uid/:uid", handlers.Update(db))
+	r.POST("/membership/:uid", handlers.Membership(db))
 
 	r.OPTIONS("/users/:query", func(c *gin.Context) {
 		c.JSON(200, gin.H{})

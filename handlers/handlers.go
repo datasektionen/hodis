@@ -47,6 +47,28 @@ func Uid(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+func Membership(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !c.MustGet("check-membership").(bool) {
+			c.JSON(401, gin.H{"error": "Permission denied."})
+			return
+		}
+		res, err := ldap.ExactUid(c.Param("uid"))
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		response := map[string]any{
+			"permanentMember": res.PermanentMember,
+			"member":          res.PermanentMember || res.MemberTo != nil && res.MemberTo.After(time.Now()),
+		}
+		if res.MemberTo != nil {
+			response["memberTo"] = res.MemberTo.Format(time.DateOnly)
+		}
+		c.JSON(200, response)
+	}
+}
+
 func UgKthid(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		res, err := ldap.ExactUgid(c.Param("ugid"))
@@ -281,10 +303,12 @@ func Authenticate(loginURL, apiKey, plsURL string) gin.HandlerFunc {
 			}
 			c.Set("uid", res.User)
 			c.Set("admin", HasPlsPermission(plsURL, "user", res.User, "admin"))
+			c.Set("check-membership", HasPlsPermission(plsURL, "user", res.User, "check-membership"))
 			c.Next()
 		} else if token.API != "" {
 			c.Set("uid", "")
 			c.Set("admin", HasPlsPermission(plsURL, "token", token.API, "admin"))
+			c.Set("check-membership", HasPlsPermission(plsURL, "token", token.API, "check-membership"))
 			c.Next()
 		} else {
 			c.JSON(400, gin.H{"error": "Missing token"})
