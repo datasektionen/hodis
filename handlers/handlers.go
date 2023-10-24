@@ -73,21 +73,15 @@ func Tag(db *gorm.DB) gin.HandlerFunc {
 func Update(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		data := c.MustGet("data").(models.User)
-		// Nobody can change UgKthid
 		data.UgKthid = ""
 
-		uid := c.MustGet("uid").(string)
 		admin := c.MustGet("admin").(bool)
 		if !admin {
-			// No admin? No change
-			data.Uid = ""
-		}
-
-		ldap.ExactUid(c.Param("uid"))
-		if uid != c.Param("uid") && !admin {
 			c.JSON(401, gin.H{"error": "Permission denied."})
 			return
 		}
+
+		ldap.ExactUid(c.Param("uid"))
 		var user models.User
 		db.Where(models.User{Uid: c.Param("uid")}).Assign(data).FirstOrCreate(&user)
 		c.JSON(200, user)
