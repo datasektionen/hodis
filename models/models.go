@@ -16,10 +16,10 @@ type User struct {
 	DisplayName string `form:"displayName" json:"displayName"`
 
 	// Should not be considered when `PermanentMember` is true
-	MemberTo        *time.Time `form:"memberTo"        json:"memberTo"`
-	PermanentMember bool       `form:"permanentMember" json:"permanentMember" gorm:"default:false"`
-	Year            int        `form:"year"            json:"year"`
-	Tag             string     `form:"tag"             json:"tag"`
+	MemberTo        *time.Time `form:"-"    json:"-"`
+	PermanentMember bool       `form:"-"    json:"-" gorm:"default:false"`
+	Year            int        `form:"year" json:"year"`
+	Tag             string     `form:"tag"  json:"tag"`
 
 	Refs uint `json:"-"`
 }

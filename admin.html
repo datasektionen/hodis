@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ho dis? Admin</title>
+    <style>
+#error {
+    color: red;
+}
+    </style>
+</head>
+<body>
+    <h1>THS chapter member sheet</h1>
+    <a class="login"></a>
+    <form>
+        <label for="sheet">File:</label>
+        <input id="sheet" type="file">
+        <br>
+        <button>Submit</button>
+        <p id="error"></p>
+    </form>
+    <script>
+        const login = document.querySelector(".login");
+        const code = new URLSearchParams(location.search).get("code");
+        if (code) {
+            // Removes the code from the URL without reloading the page.
+            history.replaceState(null, "", location.pathname);
+        } else {
+            login.href = "https://login.datasektionen.se/login?callback=" + location.href + "?code=";
+            login.innerText = "login";
+        }
+        const form = document.querySelector("form");
+        const file = document.querySelector("#sheet");
+        const error = document.querySelector("#error");
+        form.onsubmit = async event => {
+            event.preventDefault();
+            error.innerHTML = "";
+            const sheetData = await file.files[0].arrayBuffer();
+            const res = await fetch("/membership-sheet", {
+                method: "POST",
+                headers: {
+                    "X-Token": code,
+                },
+                body: sheetData,
+            });
+            const body = await res.json();
+            if ("error" in body) {
+                error.innerText = body.error;
+            } else if ("erroring-rows" in body) {
+                if (body["erroring-rows"].length === 0) {
+                    error.innerText = "✅";
+                }
+                for (const row of body["erroring-rows"]) {
+                    const el = document.createElement("span");
+                    el.innerText = row;
+                    error.appendChild(el);
+                    error.appendChild(document.createElement("br"));
+                }
+            }
+        }
+    </script>
+</body>
+</html>

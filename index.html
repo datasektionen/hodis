@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ho dis?</title>
+    <style>
+.error {
+    color: red;
+    font-style: italic;
+}
+.error::before {
+    content: ": ";
+}
+    </style>
+</head>
+<body>
+    <h1>Chapter member checker</h1>
+    <a class="login"></a>
+    <p>
+        Paste a bunch of kth-id:s or kth emails in the textarea below, one per line. Whitespace is
+        trimmed from the beginning and end.
+    </p>
+    <p>
+        The kth id:s that do not seem to be chapter members will be output below.
+    </p>
+    <form>
+        <textarea cols="30" rows="10"></textarea>
+        <br>
+        <button>Check</button>
+    </form>
+    <ul></ul>
+
+    <script>
+        const login = document.querySelector(".login");
+        const token = new URLSearchParams(location.search).get("token");
+        if (token) {
+            // Removes the token from the URL without reloading the page.
+            history.replaceState(null, "", location.pathname);
+        } else {
+            login.href = "https://login.datasektionen.se/login?callback=" + location.href + "?token=";
+            login.innerText = "login";
+        }
+        const form = document.querySelector("form");
+        const textarea = document.querySelector("textarea");
+        const ul = document.querySelector("ul");
+        form.onsubmit = async event => {
+            event.preventDefault();
+            ul.innerHTML = "";
+            const ids = textarea.value.split("\n");
+            for (let id of ids) {
+                id = id.trim();
+                if (id.endsWith("@kth.se"))
+                    id = id.substring(0, id.length - "@kth.se".length);
+                if (id.length == "") continue;
+                const res = await fetch("/membership/" + id, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        token,
+                    }),
+                });
+                const body = await res.json();
+                if ("error" in body) {
+                    const li = document.createElement("li");
+                    const span1 = document.createElement("span");
+                    span1.classList.add("id");
+                    span1.innerText = id;
+                    li.appendChild(span1);
+                    const span2 = document.createElement("span");
+                    span2.classList.add("error");
+                    span2.innerText = body.error;
+                    li.appendChild(span2);
+                    ul.appendChild(li);
+                    continue;
+                }
+                if (body.member == true) continue;
+
+                const li = document.createElement("li");
+                const span1 = document.createElement("span");
+                span1.classList.add("id");
+                span1.innerText = id;
+                li.appendChild(span1);
+                const span2 = document.createElement("span");
+                span2.classList.add("error");
+                span2.innerText = body.memberTo ? "was member until " + body.memberTo : "not a chapter member";
+                li.appendChild(span2);
+                ul.appendChild(li);
+            }
+            if (ul.innerHTML == "") {
+                ul.innerHTML = "everyone is a chapter member";
+            }
+        };
+    </script>
+</body>
+</html>
