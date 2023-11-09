@@ -217,14 +217,12 @@ func MembershipSheet(db *gorm.DB) gin.HandlerFunc {
 			// solution.
 			uid := strings.TrimSuffix(email, "@kth.se")
 			var user models.User
-			db.Where(models.User{Uid: uid}).First(&user)
+			db.Where(models.User{Mail: email}).First(&user)
 			inDB := user.UgKthid != ""
-			user, err = ldap.ExactUid(uid)
-			if err != nil {
-				log.Println(email, err)
-				errorRows = append(errorRows, email)
-				continue
+			if u, _ := ldap.ExactUid(uid); u.Uid != "" {
+				user = u
 			}
+
 			user.MemberTo = &memberTo
 			err = nil
 			if inDB {
